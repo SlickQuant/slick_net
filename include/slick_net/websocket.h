@@ -422,16 +422,16 @@ inline void Websocket::shutdown()
 
 
 // A Terminator class to ensure Websocket::shutdown() is called at program exit
-struct ServiceTerminater
+struct WebsocketServiceTerminater
 {
-    ServiceTerminater() {
+    WebsocketServiceTerminater() {
     }
-    ~ServiceTerminater() {
+    ~WebsocketServiceTerminater() {
         Websocket::shutdown();
     }
 };
 
-inline static ServiceTerminater s_service_terminater;
+inline static WebsocketServiceTerminater s_websocket_service_terminater;
 
 
 }   // end namespace slick_net

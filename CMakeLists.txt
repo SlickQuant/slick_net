@@ -21,9 +21,10 @@ endif()
 set(Boost_USE_STATIC_LIBS ON)
 find_package(Boost CONFIG REQUIRED COMPONENTS beast context)
 
-# set(OPENSSL_USE_STATIC_LIBS TRUE)
-# set(OPENSSL_MSVC_STATIC_RT TRUE)
 find_package(OpenSSL REQUIRED)
+
+message(STATUS "OpenSSL: ${OPENSSL_INCLUDE_DIR}")
+message(STATUS "Beast: ${boost_beast_CONFIG}")
 
 # Add header-only library
 add_library(slick_net INTERFACE)
@@ -44,8 +45,13 @@ else()
     set(CMAKE_EXE_LINKER_FLAGS_DEBUG "-fsanitize=address,undefined")
 endif()
 
-# enable_testing()
-# add_subdirectory(tests)
+option(BUILD_SLICK_NET_TESTS "Build tests" ON)
+if (BUILD_SLICK_NET_TESTS)
+    message(STATUS "Building slick_net tests")
+    add_subdirectory(tests)
+else()
+    message(STATUS "Skipping slick_net tests")
+endif()
 
 option(BUILD_SLICK_NET_EXAMPLES "Build examples" ON)
 if(BUILD_SLICK_NET_EXAMPLES)
