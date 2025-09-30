@@ -1,5 +1,12 @@
 cmake_minimum_required(VERSION 3.20)
 
+if (MSVC)
+    option(LINK_STATICALLY "Build tests" OFF)
+    if (LINK_STATICALLY)
+        set(VCPKG_TARGET_TRIPLET x64-windows-static)
+    endif()
+endif()
+
 set(BUILD_VERSION 0.1.0.0)
 project(slick_net VERSION ${BUILD_VERSION} LANGUAGES CXX)
 
@@ -18,7 +25,9 @@ if (CMAKE_BUILD_TYPE MATCHES Release)
     add_definitions(-DNDEBUG)
 endif()
 
-set(Boost_USE_STATIC_LIBS ON)
+if (LINK_STATICALLY)
+    set(Boost_USE_STATIC_LIBS ON)
+endif()
 find_package(Boost CONFIG REQUIRED COMPONENTS beast context)
 find_package(OpenSSL REQUIRED)
 
@@ -52,6 +61,9 @@ if (MSVC)
     set(CMAKE_SUPPRESS_REGENERATION true)   # supress zero_check
     set_target_properties(slick_net PROPERTIES LINK_INCREMENTAL ON)
     target_compile_options(slick_net INTERFACE "/bigobj")
+    if (LINK_STATICALLY)
+        set_target_properties(slick_net PROPERTIES MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
 else()
     set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -flto")
     set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer")
