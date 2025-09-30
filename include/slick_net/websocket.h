@@ -21,27 +21,7 @@
 
 #pragma once
 
-#include <atomic>
-#include <cstdlib>
-#include <functional>
-#include <unordered_map>
-#include <mutex>
-
-#define WIN32_LEAN_AND_MEAN
-
-#include <boost/beast/core.hpp>
-#include <boost/beast/websocket.hpp>
-#include <boost/beast/websocket/ssl.hpp>
-#include <boost/asio/ssl.hpp>
-#include <boost/asio/strand.hpp>
-#include <boost/asio/awaitable.hpp>
-#include <boost/asio/co_spawn.hpp>
-#include <boost/asio/detached.hpp>
-#include <boost/asio/signal_set.hpp>
-#include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/ssl/stream.hpp>
-#include <boost/asio/connect.hpp>
-#include <csignal>
+#include "pch.h"
 
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
@@ -114,6 +94,7 @@ public:
 
 private:
     asio::awaitable<void> do_wss_session();
+    void do_write();
     void on_write(beast::error_code ec, std::size_t bytes_transferred);
     void on_read(beast::error_code ec, std::size_t bytes_transferred);
     void on_close(beast::error_code ec);
@@ -129,7 +110,6 @@ private:
 
     websocket::stream<ssl::stream<beast::tcp_stream>> ws_;
     beast::flat_buffer r_buffer_;
-    beast::multi_buffer w_buffer_;
     std::string url_;
     std::string host_;
     std::string path_;
@@ -139,6 +119,9 @@ private:
     std::function<void(const char*, std::size_t)> on_data_;
     std::function<void(std::string err)> on_error_;
     std::atomic<Status> status_{ Status::DISCONNECTED };
+    slick::SlickQueue<char> w_buffer_;
+    uint64_t w_cursor_{0};
+    std::atomic_bool in_writting_{false};
 };
 
 // ---------------------------------------------------- Implementation ----------------------------------------------------
@@ -163,6 +146,7 @@ inline Websocket::Websocket(
     , on_diconnected_(std::move(onDiconnectedCallback))
     , on_data_(std::move(onDataCallback))
     , on_error_(std::move(onErrorCallback))
+    , w_buffer_(1048576)
 {
     std::string protoco("wss");
     auto pos = url_.find("://");
@@ -275,14 +259,15 @@ inline void Websocket::close()
 
 inline void Websocket::send(const char* buffer, size_t len)
 {
-    LOG_DEBUG("--> {}", std::string(buffer, len));
-    auto n = asio::buffer_copy(w_buffer_.prepare(len), asio::buffer(buffer, len));
-    w_buffer_.commit(n);
-    ws_.async_write(
-        w_buffer_.data(),
-        beast::bind_front_handler(
-            &Websocket::on_write,
-            shared_from_this()));
+    auto index = w_buffer_.reserve(len);
+    memcpy(w_buffer_[index], buffer, len);
+    w_buffer_.publish(index, len);
+
+    if (!in_writting_.load(std::memory_order_relaxed)) {
+        in_writting_.store(true, std::memory_order_release);
+        asio::post(ws_.get_executor(),
+            beast::bind_front_handler(&Websocket::do_write, shared_from_this()));
+    }
 }
 
 inline asio::awaitable<void> Websocket::do_wss_session()
@@ -363,14 +348,30 @@ inline asio::awaitable<void> Websocket::do_wss_session()
     }
 }
 
+inline void Websocket::do_write() {
+    auto [msg, len] = w_buffer_.read(w_cursor_);
+    if (msg && len) {
+        LOG_DEBUG("--> {}", std::string_view(msg, len));
+        ws_.async_write(
+            asio::buffer(msg, len),
+            beast::bind_front_handler(
+                &Websocket::on_write,
+                shared_from_this()));
+    }
+    else {
+        in_writting_.store(false, std::memory_order_release);
+    }
+}
+
 inline void Websocket::on_write(beast::error_code ec, std::size_t bytes_transferred)
 {
+    boost::ignore_unused(bytes_transferred);
     if(ec)
     {
         on_error_(std::format("Failed to read {}", ec.message()));
         return;
     }
-    w_buffer_.consume(bytes_transferred);
+    do_write();
 }
 
 inline void Websocket::on_read(beast::error_code ec, std::size_t bytes_transferred)

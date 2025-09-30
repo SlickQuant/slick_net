@@ -18,23 +18,33 @@ int main()
     logger.set_level(LogLevel::L_INFO);
     logger.init(1024); // use pre-added sinks
 
+    std::vector<nlohmann::json> requests {
+        R"({
+            "type": "subscribe",
+            "channel": "level2",
+            "product_ids": ["BTC-USD"]
+        })"_json,
+        R"({
+            "type": "subscribe",
+            "channel": "market_trades",
+            "product_ids": ["BTC-USD"]
+        })"_json,
+    };
+
     std::shared_ptr<slick_net::Websocket> ws;
     ws = std::make_shared<slick_net::Websocket>(
         // "wss://echo.websocket.org",
         "wss://advanced-trade-ws.coinbase.com",
-        [&ws](){ 
+        [&](){ 
             LOG_INFO("ws connected");
-            nlohmann::json req = R"({
-                "type": "subscribe",
-                "channel": "level2",
-                "product_ids": ["BTC-USD"]
-            })"_json;
-            auto str_req = req.dump();
-            ws->send(str_req.data(), str_req.size()); 
+            for (const auto &req : requests) {
+                auto str_req = req.dump();
+                ws->send(str_req.data(), str_req.size()); 
+            }
         },                                                                                          // onConnected
         [](){ LOG_INFO("ws disconnected"); },                                                       // onDisconnected
-        [&ws](const char* data, size_t size){ LOG_INFO("onData: {}", std::string(data, size)); },   // onData
-        [&ws](std::string err){ LOG_ERROR("onError: {}", std::move(err)); ws->close(); }            // onError
+        [&](const char* data, size_t size){ LOG_INFO("onData: {}", std::string(data, size)); },   // onData
+        [&](std::string err){ LOG_ERROR("onError: {}", std::move(err)); ws->close(); }            // onError
     );
     ws->open();
 

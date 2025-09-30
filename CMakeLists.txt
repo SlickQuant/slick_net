@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
-set(slick_net_VERSION 0.1.0.0)
-project(slick_net VERSION ${slick_net_VERSION} LANGUAGES CXX)
+set(BUILD_VERSION 0.1.0.0)
+project(slick_net VERSION ${BUILD_VERSION} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -20,9 +20,20 @@ endif()
 
 set(Boost_USE_STATIC_LIBS ON)
 find_package(Boost CONFIG REQUIRED COMPONENTS beast context)
-
 find_package(OpenSSL REQUIRED)
 
+include(FetchContent)
+
+# Disable tests for slick_queue
+set(BUILD_SLICK_QUEUE_TESTS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    slick_queue
+    GIT_REPOSITORY https://github.com/SlickQuant/slick_queue.git
+    GIT_TAG v1.0.2.0
+)
+FetchContent_MakeAvailable(slick_queue)
+
+message(STATUS "slick_queue: ${slick_queue_INCLUDE_DIR}")
 message(STATUS "OpenSSL: ${OPENSSL_INCLUDE_DIR}")
 message(STATUS "Beast: ${boost_beast_CONFIG}")
 
@@ -33,11 +44,13 @@ target_include_directories(slick_net INTERFACE
     $<INSTALL_INTERFACE:include>
 )
 target_link_libraries(slick_net INTERFACE slick_logger slick_queue Boost::asio Boost::beast Boost::context OpenSSL::SSL OpenSSL::Crypto)
+target_precompile_headers(slick_net INTERFACE include/slick_net/pch.h)
 
 if (MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "-O2")
     add_definitions(-D_WIN32_WINNT=0x0A00)
     set(CMAKE_SUPPRESS_REGENERATION true)   # supress zero_check
+    set_target_properties(slick_net PROPERTIES LINK_INCREMENTAL ON)
     target_compile_options(slick_net INTERFACE "/bigobj")
 else()
     set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -flto")
