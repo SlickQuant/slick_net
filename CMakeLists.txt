@@ -33,7 +33,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(slick_queue)
 
-message(STATUS "slick_queue: ${slick_queue_INCLUDE_DIR}")
+message(STATUS "slick_queue: ${slick_queue_SOURCE_DIR}")
 message(STATUS "OpenSSL: ${OPENSSL_INCLUDE_DIR}")
 message(STATUS "Beast: ${boost_beast_CONFIG}")
 
