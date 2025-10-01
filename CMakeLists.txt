@@ -27,6 +27,8 @@ endif()
 
 if (LINK_STATICALLY)
     set(Boost_USE_STATIC_LIBS ON)
+    set(OPENSSL_USE_STATIC_LIBS TRUE)
+    set(OPENSSL_MSVC_STATIC_RT TRUE)
 endif()
 find_package(Boost CONFIG REQUIRED COMPONENTS beast context)
 find_package(OpenSSL REQUIRED)
@@ -38,7 +40,7 @@ set(BUILD_SLICK_QUEUE_TESTS OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
     slick_queue
     GIT_REPOSITORY https://github.com/SlickQuant/slick_queue.git
-    GIT_TAG v1.0.2.0
+    GIT_TAG v1.0.2.1
 )
 FetchContent_MakeAvailable(slick_queue)
 

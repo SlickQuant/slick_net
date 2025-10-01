@@ -11,7 +11,7 @@ set(BUILD_SLICK_LOGGER_BENCHMARKS OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
     slick_logger
     GIT_REPOSITORY https://github.com/SlickQuant/slick_logger.git
-    GIT_TAG v0.1.1.0
+    GIT_TAG v1.0.0.3
 )
 FetchContent_MakeAvailable(slick_logger)
 
