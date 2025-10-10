@@ -70,7 +70,8 @@ public:
 
     void close();
 
-    void send(const char* buffer, size_t len);
+    void send(const char* buffer, size_t len, bool is_binary = false);
+    void send_binary_data(const char* buffer, size_t len);
 
     static void shutdown();
 
@@ -103,10 +104,8 @@ private:
     static asio::io_context ioc_;
     static ssl::context ctx_;
     static std::thread service_thread_;
-    static std::atomic_int_fast32_t next_id_;
     static std::atomic_bool init_service_thread_;
     static std::atomic_bool run_;
-    static std::unordered_map<std::string, std::shared_ptr<Websocket>> sockets_;
 
     websocket::stream<ssl::stream<beast::tcp_stream>> ws_;
     beast::flat_buffer r_buffer_;
@@ -129,7 +128,6 @@ private:
 // Static member definitions
 inline asio::io_context Websocket::ioc_;
 inline ssl::context Websocket::ctx_{ssl::context::tlsv12_client};
-inline std::atomic_int_fast32_t Websocket::next_id_ = 0;
 inline std::thread Websocket::service_thread_;
 inline std::atomic_bool Websocket::init_service_thread_{ false };
 inline std::atomic_bool Websocket::run_;
@@ -194,7 +192,7 @@ inline Websocket::Websocket(
     }
 }
 
-extern "C" void __signal_handler(int signal) {
+extern "C" inline void __signal_handler(int signal) {
     if (signal == SIGINT || signal == SIGTERM) {
         Websocket::shutdown();
     }
@@ -204,7 +202,17 @@ inline void Websocket::open()
 {
     LOG_INFO("Opening WebSocket {}", url_);
     status_.store(Status::CONNECTING, std::memory_order_release);
-    asio::co_spawn(Websocket::ioc_, do_wss_session(), asio::detached);
+    asio::co_spawn(Websocket::ioc_, do_wss_session(),
+        [self = shared_from_this()](std::exception_ptr eptr) {
+            if (eptr) {
+                try {
+                    std::rethrow_exception(eptr);
+                } catch (const std::exception& e) {
+                    self->status_.store(Status::DISCONNECTED, std::memory_order_release);
+                    self->on_error_(e.what());
+                }
+            }
+        });
 
     auto init_service = init_service_thread_.load(std::memory_order_relaxed);
     if (init_service_thread_.compare_exchange_strong(init_service, true, std::memory_order_acq_rel) && !init_service)
@@ -227,7 +235,7 @@ inline void Websocket::open()
                 catch(const std::exception& e)
                 {
                     ioc_.restart();
-                    LOG_ERROR(std::format("{}", e.what()));
+                    LOG_ERROR("{}", e.what());
                 }
             }
 
@@ -257,17 +265,27 @@ inline void Websocket::close()
     }
 }
 
-inline void Websocket::send(const char* buffer, size_t len)
+inline void Websocket::send(const char* buffer, size_t len, bool is_binary)
 {
-    auto index = w_buffer_.reserve(len);
-    memcpy(w_buffer_[index], buffer, len);
-    w_buffer_.publish(index, len);
+    auto l = len + 1;   // +1 for is_bool flag
+    auto index = w_buffer_.reserve(l);
+    *w_buffer_[index] = static_cast<char>(is_binary);
+    memcpy(w_buffer_[index + 1], buffer, len);
+    w_buffer_.publish(index, l);
 
-    if (!in_writting_.load(std::memory_order_relaxed)) {
-        in_writting_.store(true, std::memory_order_release);
-        asio::post(ws_.get_executor(),
-            beast::bind_front_handler(&Websocket::do_write, shared_from_this()));
-    }
+    // Always post to the executor to ensure thread-safe write initiation
+    asio::post(ws_.get_executor(), [self = shared_from_this()]() {
+        // Check and set in_writting_ atomically within the executor context
+        bool expected = false;
+        if (self->in_writting_.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
+            self->do_write();
+        }
+    });
+}
+
+inline void Websocket::send_binary_data(const char* buffer, size_t len)
+{
+    send(buffer, len, true);
 }
 
 inline asio::awaitable<void> Websocket::do_wss_session()
@@ -306,12 +324,12 @@ inline asio::awaitable<void> Websocket::do_wss_session()
         // Turn off the timeout on the tcp_stream, because
         // the websocket stream has its own timeout system.
         beast::get_lowest_layer(ws_).expires_never();
-    
+
         // Set suggested timeout settings for the websocket
         ws_.set_option(
             websocket::stream_base::timeout::suggested(
                 beast::role_type::client));
-    
+
         // Set a decorator to change the User-Agent of the handshake
         ws_.set_option(websocket::stream_base::decorator(
             [](websocket::request_type& req)
@@ -323,6 +341,12 @@ inline asio::awaitable<void> Websocket::do_wss_session()
 
         // Perform the WebSocket handshake
         co_await ws_.async_handshake(host_, path_, asio::use_awaitable);
+
+        if (status_.load(std::memory_order_relaxed) != Status::CONNECTING ||
+            !run_.load(std::memory_order_relaxed)) [[unlikely]] {
+            // socket close is called
+            co_return;
+        }
 
         status_.store(Status::CONNECTED, std::memory_order_release);
 
@@ -339,19 +363,31 @@ inline asio::awaitable<void> Websocket::do_wss_session()
     {
         if (se.code() != websocket::error::closed)
         {
-            on_error_(se.code().message());
+            throw;
         }
     }
     catch (std::exception const& e)
     {
-        on_error_(e.what());
+        throw;
     }
 }
 
 inline void Websocket::do_write() {
+    // Read is already within the executor strand, safe to access w_cursor_
     auto [msg, len] = w_buffer_.read(w_cursor_);
     if (msg && len) {
+        if (status_.load(std::memory_order_relaxed) != Status::CONNECTED) [[unlikely]] {
+            // socket close is called
+            return;
+        }
+
+        bool is_binary = msg[0];
+        ++msg;
+        --len;
+        ws_.binary(is_binary);
+
         LOG_DEBUG("--> {}", std::string_view(msg, len));
+        // Only one async_write at a time - this is guaranteed by in_writting_ flag
         ws_.async_write(
             asio::buffer(msg, len),
             beast::bind_front_handler(
@@ -359,6 +395,7 @@ inline void Websocket::do_write() {
                 shared_from_this()));
     }
     else {
+        // No more data to write, release the write lock
         in_writting_.store(false, std::memory_order_release);
     }
 }
@@ -368,9 +405,21 @@ inline void Websocket::on_write(beast::error_code ec, std::size_t bytes_transfer
     boost::ignore_unused(bytes_transferred);
     if(ec)
     {
-        on_error_(std::format("Failed to read {}", ec.message()));
+        if (run_.load(std::memory_order_relaxed) &&
+            status_.load(std::memory_order_relaxed) == Status::DISCONNECTED && 
+            ec != beast::websocket::error::closed && ec != asio::error::eof &&
+            ec != asio::error::operation_aborted &&
+            !(ec.value() == 995 && ec.category() == boost::system::system_category()))
+        {
+            on_error_(std::format("Failed to write {}", ec.message()));
+            close();
+        }
+        in_writting_.store(false, std::memory_order_release);
         return;
     }
+
+    // Continue writing next message if available
+    // This is safe because we're already in the strand and in_writting_ is still true
     do_write();
 }
 
@@ -378,15 +427,30 @@ inline void Websocket::on_read(beast::error_code ec, std::size_t bytes_transferr
 {
     if(ec)
     {
-        on_error_(std::format("Failed to read {}", ec.message()));
+        if (run_.load(std::memory_order_relaxed) &&
+            status_.load(std::memory_order_relaxed) == Status::CONNECTED &&
+            ec != beast::websocket::error::closed && ec != asio::error::eof &&
+            ec != asio::error::operation_aborted &&
+            !(ec.value() == 995 && ec.category() == boost::system::system_category()))
+        {
+            on_error_(std::format("Failed to read {}", ec.message()));
+            close();
+        }
+        else if (status_.load(std::memory_order_relaxed) == Status::CONNECTED) {
+            // EOF or websocket::error::closed means graceful disconnect
+            status_.store(Status::DISCONNECTED, std::memory_order_relaxed);
+            on_diconnected_();
+        }
         return;
     }
 
-    LOG_TRACE("<-- {}", std::string((const char*)r_buffer_.data().data(), bytes_transferred));
-    on_data_((const char*)r_buffer_.data().data(), bytes_transferred);
-    r_buffer_.consume(bytes_transferred);
+    if (run_.load(std::memory_order_relaxed) &&
+        status_.load(std::memory_order_relaxed) == Status::CONNECTED)
+    {
+        LOG_TRACE("<-- {}", std::string((const char*)r_buffer_.data().data(), bytes_transferred));
+        on_data_((const char*)r_buffer_.data().data(), bytes_transferred);
+        r_buffer_.consume(bytes_transferred);
 
-    if (status_.load(std::memory_order_relaxed) == Status::CONNECTED) {
         // read next message
         ws_.async_read(
             r_buffer_,
@@ -398,7 +462,11 @@ inline void Websocket::on_read(beast::error_code ec, std::size_t bytes_transferr
 
 inline void Websocket::on_close(beast::error_code ec)
 {
-    if (ec && ec != beast::websocket::error::closed)
+    if (ec && ec != beast::websocket::error::closed &&
+        run_.load(std::memory_order_relaxed) &&
+        ec != asio::error::eof &&
+        ec != asio::error::operation_aborted && 
+        !(ec.value() == 995 && ec.category() == boost::system::system_category()))
     {
         on_error_(ec.message());
     }
@@ -406,6 +474,7 @@ inline void Websocket::on_close(beast::error_code ec)
     // If we get here then the connection is closed gracefully
     LOG_INFO("Websocket {} closed", url_);
     status_.store(Status::DISCONNECTED, std::memory_order_release);
+    on_diconnected_();
 }
 
 inline void Websocket::shutdown()

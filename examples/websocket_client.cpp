@@ -16,7 +16,7 @@ int main()
     auto &logger = Logger::instance();
     logger.add_console_sink(true, true);
     logger.set_level(LogLevel::L_INFO);
-    logger.init(1024); // use pre-added sinks
+    logger.init(1024, 16777216); // use pre-added sinks
 
     std::vector<nlohmann::json> requests {
         R"({
@@ -33,7 +33,7 @@ int main()
 
     std::shared_ptr<slick_net::Websocket> ws;
     ws = std::make_shared<slick_net::Websocket>(
-        // "wss://echo.websocket.org",
+        // "wss://ws.postman-echo.com/raw",
         "wss://advanced-trade-ws.coinbase.com",
         [&](){ 
             LOG_INFO("ws connected");
