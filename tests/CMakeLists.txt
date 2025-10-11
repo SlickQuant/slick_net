@@ -18,11 +18,14 @@ enable_testing()
 
 add_executable(websocket_tests websocket_tests.cpp)
 target_link_libraries(websocket_tests PRIVATE slick_net GTest::gtest_main)
-target_compile_options(websocket_tests PRIVATE /fsanitize=address)
 
 add_executable(http_tests http_tests.cpp)
 target_link_libraries(http_tests PRIVATE slick_net GTest::gtest_main)
-target_compile_options(http_tests PRIVATE /fsanitize=address)
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_options(websocket_tests PRIVATE /fsanitize=address)
+    target_compile_options(http_tests PRIVATE /fsanitize=address)
+endif()
 
 add_test(NAME WebsocketTests COMMAND websocket_tests)
 add_test(NAME HttpTests COMMAND http_tests)
