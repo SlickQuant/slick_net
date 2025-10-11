@@ -98,9 +98,10 @@ using namespace slick_net;
 using json = nlohmann::json;
 
 int main() {
-    auto ws = std::make_shared<Websocket>(
+    std::shared_ptr<Websocket> ws;
+    ws = std::make_shared<Websocket>(
         "wss://advanced-trade-ws.coinbase.com",
-        [&ws]() { 
+        [&]() { 
             std::cout << "Connected to Coinbase\n";
             // Subscribe to market data
             json subscribe_msg = {
@@ -124,6 +125,7 @@ int main() {
     
     ws->open();
     
+    // Ctrl + C to exit
     // Keep running
     while(Websocket::is_running()) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
