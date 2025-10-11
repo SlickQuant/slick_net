@@ -776,7 +776,7 @@ inline asio::awaitable<void> HttpStream::do_stream_session()
         // Set up an HTTP GET request for streaming
         http::request<http::string_body> req{ http::verb::get, target_, 11 };
         req.set(http::field::host, host_);
-        req.set(http::field::user_agent, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+        req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
         req.set(http::field::accept, "text/event-stream");
         req.set(http::field::cache_control, "no-cache");
 
