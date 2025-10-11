@@ -7,7 +7,7 @@ if (MSVC)
     endif()
 endif()
 
-set(BUILD_VERSION 0.1.0.0)
+set(BUILD_VERSION 1.0.0.0)
 project(slick_net VERSION ${BUILD_VERSION} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -68,8 +68,30 @@ if (MSVC)
     endif()
 else()
     set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -flto")
-    set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer")
-    set(CMAKE_EXE_LINKER_FLAGS_DEBUG "-fsanitize=address,undefined")
+endif()
+
+option(ENABLE_ASAN "Enable AddressSanitizer" OFF)
+if(ENABLE_ASAN)
+  if(MSVC)
+    # MSVC AddressSanitizer (requires Visual Studio 2022 17.7+)
+    if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "19.37")
+      add_compile_options(/fsanitize=address)
+      add_link_options(/INCREMENTAL:NO)
+
+      # Additional MSVC ASan flags for better compatibility
+      add_compile_definitions(_DISABLE_VECTOR_ANNOTATION)
+      add_compile_definitions(_DISABLE_STRING_ANNOTATION)
+
+      message(STATUS "AddressSanitizer enabled for MSVC ${CMAKE_CXX_COMPILER_VERSION}")
+    else()
+      message(WARNING "AddressSanitizer requires Visual Studio 2022 17.7+ (current: ${CMAKE_CXX_COMPILER_VERSION})")
+      set(ENABLE_ASAN OFF CACHE BOOL "ASan disabled - compiler too old" FORCE)
+    endif()
+  else()
+    # GCC/Clang AddressSanitizer
+    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address,undefined)
+  endif()
 endif()
 
 option(BUILD_SLICK_NET_TESTS "Build tests" ON)
@@ -88,24 +110,25 @@ else()
     message(STATUS "Skipping slick_net examples")
 endif()
 
-# # Installation rules
-# install(DIRECTORY include/ DESTINATION include)
+# Installation rules
+install(DIRECTORY include/ DESTINATION include)
 
-# # Automatically run install after build in Release mode
-# if(CMAKE_BUILD_TYPE STREQUAL "Release")
-#     add_custom_target(dist_slick_logger ALL
-#         COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --prefix ${CMAKE_BINARY_DIR}/dist
-#         COMMENT "Create distribution after release build"
-#         VERBATIM
-#     )
+# Automatically run install after build in Release mode
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    add_custom_target(dist_slick_net ALL
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_BINARY_DIR}/dist/include
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMENT "Copying slick_net headers to dist/include"
+        VERBATIM
+    )
 
-#     if (PROJECT_IS_TOP_LEVEL)
-#         add_custom_target(package_slick_logger ALL
-#             COMMAND ${CMAKE_COMMAND} -E tar "cfv" "${CMAKE_BINARY_DIR}/dist/slick_logger_${BUILD_VERSION}.zip" --format=zip "include"
-#             WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/dist"
-#             COMMENT "Creating zip archive"
-#         )
+    if (PROJECT_IS_TOP_LEVEL)
+        add_custom_target(package_slick_net ALL
+            COMMAND ${CMAKE_COMMAND} -E tar "cfv" "${CMAKE_BINARY_DIR}/dist/slick_net_${BUILD_VERSION}.zip" --format=zip "include"
+            WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/dist"
+            COMMENT "Creating zip archive"
+        )
 
-#         add_dependencies(package_slick_logger dist_slick_logger dist_slick_queue)
-#     endif()
-# endif()
+        add_dependencies(package_slick_net dist_slick_net)
+    endif()
+endif()
