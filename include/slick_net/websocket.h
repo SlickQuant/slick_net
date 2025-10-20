@@ -94,7 +94,9 @@ public:
     }
 
 private:
-    asio::awaitable<void> do_wss_session();
+    asio::awaitable<void> do_ws_session();
+    asio::awaitable<void> do_ws_session_ssl();
+    asio::awaitable<void> do_ws_session_plain();
     void do_write();
     void on_write(beast::error_code ec, std::size_t bytes_transferred);
     void on_read(beast::error_code ec, std::size_t bytes_transferred);
@@ -107,12 +109,14 @@ private:
     static std::atomic_bool init_service_thread_;
     static std::atomic_bool run_;
 
-    websocket::stream<ssl::stream<beast::tcp_stream>> ws_;
+    std::unique_ptr<websocket::stream<ssl::stream<beast::tcp_stream>>> wss_;
+    std::unique_ptr<websocket::stream<beast::tcp_stream>> ws_;
     beast::flat_buffer r_buffer_;
     std::string url_;
     std::string host_;
     std::string path_;
     uint_fast16_t port_ = -1;
+    bool use_ssl_ = true;
     std::function<void()> on_connected_;
     std::function<void()> on_diconnected_;
     std::function<void(const char*, std::size_t)> on_data_;
@@ -138,8 +142,7 @@ inline Websocket::Websocket(
     std::function<void()> &&onDiconnectedCallback,
     std::function<void(const char*, std::size_t)> &&onDataCallback,
     std::function<void(std::string err)> &&onErrorCallback)
-    : ws_(asio::make_strand(Websocket::ioc_), Websocket::ctx_)
-    , url_(std::move(url))
+    : url_(std::move(url))
     , on_connected_(std::move(onConnectedCallback))
     , on_diconnected_(std::move(onDiconnectedCallback))
     , on_data_(std::move(onDataCallback))
@@ -178,7 +181,7 @@ inline Websocket::Websocket(
             path_ = url_.substr(pos1);
         }
     }
-    
+
     pos = host_.find(':');
     if (pos != 3 && pos != 4 && pos != std::string::npos)
     {
@@ -189,6 +192,16 @@ inline Websocket::Websocket(
     if (port_ == (uint_fast16_t)-1)
     {
         port_ = (protoco == "ws") ? 80 : 443;
+    }
+
+    // Determine if SSL should be used and initialize appropriate stream
+    use_ssl_ = (protoco == "wss");
+    if (use_ssl_) {
+        wss_ = std::make_unique<websocket::stream<ssl::stream<beast::tcp_stream>>>(
+            asio::make_strand(Websocket::ioc_), Websocket::ctx_);
+    } else {
+        ws_ = std::make_unique<websocket::stream<beast::tcp_stream>>(
+            asio::make_strand(Websocket::ioc_));
     }
 }
 
@@ -202,7 +215,7 @@ inline void Websocket::open()
 {
     LOG_INFO("Opening WebSocket {}", url_);
     status_.store(Status::CONNECTING, std::memory_order_release);
-    asio::co_spawn(Websocket::ioc_, do_wss_session(),
+    asio::co_spawn(Websocket::ioc_, do_ws_session(),
         [self = shared_from_this()](std::exception_ptr eptr) {
             if (eptr) {
                 try {
@@ -257,11 +270,19 @@ inline void Websocket::close()
         LOG_INFO("Closing {}", url_);
         status_.store(Status::DISCONNECTING, std::memory_order_release);
         // Close the WebSocket connection
-        ws_.async_close(
-            websocket::close_code::normal,
-            beast::bind_front_handler(
-                &Websocket::on_close,
-                shared_from_this()));
+        if (use_ssl_) {
+            wss_->async_close(
+                websocket::close_code::normal,
+                beast::bind_front_handler(
+                    &Websocket::on_close,
+                    shared_from_this()));
+        } else {
+            ws_->async_close(
+                websocket::close_code::normal,
+                beast::bind_front_handler(
+                    &Websocket::on_close,
+                    shared_from_this()));
+        }
     }
 }
 
@@ -274,7 +295,8 @@ inline void Websocket::send(const char* buffer, size_t len, bool is_binary)
     w_buffer_.publish(index, l);
 
     // Always post to the executor to ensure thread-safe write initiation
-    asio::post(ws_.get_executor(), [self = shared_from_this()]() {
+    auto executor = use_ssl_ ? wss_->get_executor() : ws_->get_executor();
+    asio::post(executor, [self = shared_from_this()]() {
         // Check and set in_writting_ atomically within the executor context
         bool expected = false;
         if (self->in_writting_.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
@@ -288,27 +310,37 @@ inline void Websocket::send_binary_data(const char* buffer, size_t len)
     send(buffer, len, true);
 }
 
-inline asio::awaitable<void> Websocket::do_wss_session()
+inline asio::awaitable<void> Websocket::do_ws_session()
 {
+    if (use_ssl_) {
+        return do_ws_session_ssl();
+    }
+    else {
+        return do_ws_session_plain();
+    }
+}
+
+inline asio::awaitable<void> Websocket::do_ws_session_ssl() {
+    // SSL WebSocket (wss://)
     try
     {
         tcp::resolver resolver(asio::make_strand(Websocket::ioc_));
-    
+
         // Look up the domain name
         auto result = co_await resolver.async_resolve(host_, std::to_string(port_), asio::use_awaitable);
 
         // Set SNI Hostname (many hosts need this to handshake successfully)
-        if (!SSL_set_tlsext_host_name(ws_.next_layer().native_handle(), host_.c_str()))
+        if (!SSL_set_tlsext_host_name(wss_->next_layer().native_handle(), host_.c_str()))
         {
             beast::error_code ec{static_cast<int>(::ERR_get_error()), asio::error::get_ssl_category()};
             throw beast::system_error{ec};
         }
 
         // Set a timeout on the operation
-        beast::get_lowest_layer(ws_).expires_after(std::chrono::seconds(30));
+        beast::get_lowest_layer(*wss_).expires_after(std::chrono::seconds(30));
 
         // Make the connection on the IP address we get from DNS
-        auto ep = co_await asio::async_connect(ws_.next_layer().lowest_layer(), result, asio::use_awaitable);
+        auto ep = co_await asio::async_connect(wss_->next_layer().lowest_layer(), result, asio::use_awaitable);
 
         // Update the host string. This will provide the value of the
         // Host HTTP header during the WebSocket handshake.
@@ -316,22 +348,22 @@ inline asio::awaitable<void> Websocket::do_wss_session()
         host_ += ':' + std::to_string(ep.port());
 
         // Set a timeout on the operation
-        beast::get_lowest_layer(ws_).expires_after(std::chrono::seconds(30));
+        beast::get_lowest_layer(*wss_).expires_after(std::chrono::seconds(30));
 
         // Perform the SSL handshake
-        co_await ws_.next_layer().async_handshake(ssl::stream_base::client, asio::use_awaitable);
+        co_await wss_->next_layer().async_handshake(ssl::stream_base::client, asio::use_awaitable);
 
         // Turn off the timeout on the tcp_stream, because
         // the websocket stream has its own timeout system.
-        beast::get_lowest_layer(ws_).expires_never();
+        beast::get_lowest_layer(*wss_).expires_never();
 
         // Set suggested timeout settings for the websocket
-        ws_.set_option(
+        wss_->set_option(
             websocket::stream_base::timeout::suggested(
                 beast::role_type::client));
 
         // Set a decorator to change the User-Agent of the handshake
-        ws_.set_option(websocket::stream_base::decorator(
+        wss_->set_option(websocket::stream_base::decorator(
             [](websocket::request_type& req)
             {
                 req.set(http::field::user_agent,
@@ -340,7 +372,7 @@ inline asio::awaitable<void> Websocket::do_wss_session()
             }));
 
         // Perform the WebSocket handshake
-        co_await ws_.async_handshake(host_, path_, asio::use_awaitable);
+        co_await wss_->async_handshake(host_, path_, asio::use_awaitable);
 
         if (status_.load(std::memory_order_relaxed) != Status::CONNECTING ||
             !run_.load(std::memory_order_relaxed)) [[unlikely]] {
@@ -351,7 +383,78 @@ inline asio::awaitable<void> Websocket::do_wss_session()
         status_.store(Status::CONNECTED, std::memory_order_release);
 
         // start read messages
-        ws_.async_read(
+        wss_->async_read(
+            r_buffer_,
+            beast::bind_front_handler(
+                &Websocket::on_read,
+                shared_from_this()));
+
+        on_connected_();
+    }
+    catch (beast::system_error const& se)
+    {
+        if (se.code() != websocket::error::closed)
+        {
+            throw;
+        }
+    }
+    catch (std::exception const& e)
+    {
+        throw;
+    }
+}
+
+inline asio::awaitable<void> Websocket::do_ws_session_plain() {
+    // Plain WebSocket (ws://)
+    try
+    {
+        tcp::resolver resolver(asio::make_strand(Websocket::ioc_));
+
+        // Look up the domain name
+        auto result = co_await resolver.async_resolve(host_, std::to_string(port_), asio::use_awaitable);
+
+        // Set a timeout on the operation
+        beast::get_lowest_layer(*ws_).expires_after(std::chrono::seconds(30));
+
+        // Make the connection on the IP address we get from DNS
+        auto ep = co_await beast::get_lowest_layer(*ws_).async_connect(result);
+
+        // Update the host string. This will provide the value of the
+        // Host HTTP header during the WebSocket handshake.
+        // See https://tools.ietf.org/html/rfc7230#section-5.4
+        host_ += ':' + std::to_string(ep.port());
+
+        // Turn off the timeout on the tcp_stream, because
+        // the websocket stream has its own timeout system.
+        beast::get_lowest_layer(*ws_).expires_never();
+
+        // Set suggested timeout settings for the websocket
+        ws_->set_option(
+            websocket::stream_base::timeout::suggested(
+                beast::role_type::client));
+
+        // Set a decorator to change the User-Agent of the handshake
+        ws_->set_option(websocket::stream_base::decorator(
+            [](websocket::request_type& req)
+            {
+                req.set(http::field::user_agent,
+                    std::string(BOOST_BEAST_VERSION_STRING) +
+                        " websocket-client-coro");
+            }));
+
+        // Perform the WebSocket handshake
+        co_await ws_->async_handshake(host_, path_, asio::use_awaitable);
+
+        if (status_.load(std::memory_order_relaxed) != Status::CONNECTING ||
+            !run_.load(std::memory_order_relaxed)) [[unlikely]] {
+            // socket close is called
+            co_return;
+        }
+
+        status_.store(Status::CONNECTED, std::memory_order_release);
+
+        // start read messages
+        ws_->async_read(
             r_buffer_,
             beast::bind_front_handler(
                 &Websocket::on_read,
@@ -384,15 +487,24 @@ inline void Websocket::do_write() {
         bool is_binary = msg[0];
         ++msg;
         --len;
-        ws_.binary(is_binary);
 
         LOG_DEBUG("--> {}", std::string_view(msg, len));
         // Only one async_write at a time - this is guaranteed by in_writting_ flag
-        ws_.async_write(
-            asio::buffer(msg, len),
-            beast::bind_front_handler(
-                &Websocket::on_write,
-                shared_from_this()));
+        if (use_ssl_) {
+            wss_->binary(is_binary);
+            wss_->async_write(
+                asio::buffer(msg, len),
+                beast::bind_front_handler(
+                    &Websocket::on_write,
+                    shared_from_this()));
+        } else {
+            ws_->binary(is_binary);
+            ws_->async_write(
+                asio::buffer(msg, len),
+                beast::bind_front_handler(
+                    &Websocket::on_write,
+                    shared_from_this()));
+        }
     }
     else {
         // No more data to write, release the write lock
@@ -452,11 +564,19 @@ inline void Websocket::on_read(beast::error_code ec, std::size_t bytes_transferr
         r_buffer_.consume(bytes_transferred);
 
         // read next message
-        ws_.async_read(
-            r_buffer_,
-            beast::bind_front_handler(
-                &Websocket::on_read,
-                shared_from_this()));
+        if (use_ssl_) {
+            wss_->async_read(
+                r_buffer_,
+                beast::bind_front_handler(
+                    &Websocket::on_read,
+                    shared_from_this()));
+        } else {
+            ws_->async_read(
+                r_buffer_,
+                beast::bind_front_handler(
+                    &Websocket::on_read,
+                    shared_from_this()));
+        }
     }
 }
 

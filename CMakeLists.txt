@@ -7,23 +7,11 @@ if (MSVC)
     endif()
 endif()
 
-set(BUILD_VERSION 1.0.0.0)
+set(BUILD_VERSION 1.1.0.0)
 project(slick_net VERSION ${BUILD_VERSION} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-if (NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release)
-endif()
-
-if (CMAKE_BUILD_TYPE MATCHES Debug)
-    add_definitions(-DDEBUG)
-endif()
-
-if (CMAKE_BUILD_TYPE MATCHES Release)
-    add_definitions(-DNDEBUG)
-endif()
 
 if (LINK_STATICALLY)
     set(Boost_USE_STATIC_LIBS ON)

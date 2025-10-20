@@ -75,7 +75,7 @@ public:
     static void async_del(std::function<void(Response&&)> on_response, std::string_view url, std::string_view data = "", std::vector<std::pair<std::string, std::string>>&& headers = {});
 
 private:
-    static std::tuple<std::string, std::string, std::string> parse_url(std::string_view url);
+    static std::tuple<std::string, std::string, std::string, bool> parse_url(std::string_view url);
     static asio::awaitable<void> do_session(
         std::string url,
         http::verb method,
@@ -83,6 +83,26 @@ private:
         std::vector<std::pair<std::string, std::string>> headers = {},
         std::string body = "",
         int version = 11
+    );
+    static asio::awaitable<void> do_session_ssl(
+        std::string host,
+        std::string target,
+        std::string port,
+        http::verb method,
+        std::function<void(Response&&)> on_response,
+        std::vector<std::pair<std::string, std::string>> headers,
+        std::string body,
+        int version
+    );
+    static asio::awaitable<void> do_session_plain(
+        std::string host,
+        std::string target,
+        std::string port,
+        http::verb method,
+        std::function<void(Response&&)> on_response,
+        std::vector<std::pair<std::string, std::string>> headers,
+        std::string body,
+        int version
     );
 
 private:
@@ -148,6 +168,8 @@ public:
 
 private:
     asio::awaitable<void> do_stream_session();
+    asio::awaitable<void> do_stream_session_ssl();
+    asio::awaitable<void> do_stream_session_plain();
     void parse_sse_chunk(const char* data, size_t size);
 
 private:
@@ -160,6 +182,7 @@ private:
     std::string host_;
     std::string target_;
     std::string port_;
+    bool use_ssl_;
     std::vector<std::pair<std::string, std::string>> headers_;
     std::function<void()> on_connected_;
     std::function<void()> on_disconnected_;
@@ -193,11 +216,28 @@ inline asio::awaitable<void> Http::do_session(
     std::string body,
     int version)
 {
+    auto [host, target, port, use_ssl] = parse_url(url);
+
+    if (use_ssl) {
+        return do_session_ssl(host, target, port, method, on_response, headers, body, version);
+    } else {
+        return do_session_plain(host, target, port, method, on_response, headers, body, version);
+    }
+}
+
+inline asio::awaitable<void> Http::do_session_ssl(
+    std::string host,
+    std::string target,
+    std::string port,
+    http::verb method,
+    std::function<void(Response&&)> on_response,
+    std::vector<std::pair<std::string, std::string>> headers,
+    std::string body,
+    int version)
+{
     auto executor = co_await asio::this_coro::executor;
     auto resolver = asio::ip::tcp::resolver{ executor };
     auto stream   = ssl::stream<beast::tcp_stream>{ executor, Http::ctx_ };
-
-    auto [host, target, port] = parse_url(url);
 
     // Set SNI Hostname (many hosts need this to handshake successfully)
     if(!SSL_set_tlsext_host_name(stream.native_handle(), host.c_str()))
@@ -229,7 +269,7 @@ inline asio::awaitable<void> Http::do_session(
     http::request<http::string_body> req{ method, target, version };
     req.set(http::field::host, host);
     req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-    
+
     // Set headers
     for (auto &header_pair : headers) {
         req.set(header_pair.first, header_pair.second);
@@ -262,7 +302,7 @@ inline asio::awaitable<void> Http::do_session(
     }
     else {
         on_response({static_cast<uint32_t>(res.result_int()), res.reason()});
-    } 
+    }
 
     // Set the timeout.
     beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(30));
@@ -294,11 +334,89 @@ inline asio::awaitable<void> Http::do_session(
     // If we get here then the connection is closed gracefully
 }
 
-inline std::tuple<std::string, std::string, std::string> Http::parse_url(std::string_view url)
+inline asio::awaitable<void> Http::do_session_plain(
+    std::string host,
+    std::string target,
+    std::string port,
+    http::verb method,
+    std::function<void(Response&&)> on_response,
+    std::vector<std::pair<std::string, std::string>> headers,
+    std::string body,
+    int version)
+{
+    auto executor = co_await asio::this_coro::executor;
+    auto resolver = asio::ip::tcp::resolver{ executor };
+    auto stream   = beast::tcp_stream{ executor };
+
+    // Look up the domain name
+    auto const results = co_await resolver.async_resolve(host, port);
+
+    // Set the timeout.
+    stream.expires_after(std::chrono::seconds(30));
+
+    // Make the connection on the IP address we get from a lookup
+    co_await stream.async_connect(results);
+
+    // Set up an HTTP request message
+    http::request<http::string_body> req{ method, target, version };
+    req.set(http::field::host, host);
+    req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+
+    // Set headers
+    for (auto &header_pair : headers) {
+        req.set(header_pair.first, header_pair.second);
+    }
+
+    // Set request body if provided
+    if (!body.empty()) {
+        req.body() = body;
+        req.prepare_payload();
+    }
+
+    // Set the timeout.
+    stream.expires_after(std::chrono::seconds(30));
+
+    // Send the HTTP request to the remote host
+    co_await http::async_write(stream, req);
+
+    // This buffer is used for reading and must be persisted
+    beast::flat_buffer buffer;
+
+    // Declare a container to hold the response
+    http::response<http::dynamic_body> res;
+
+    // Receive the HTTP response
+    co_await http::async_read(stream, buffer, res);
+
+    if (res.result() == http::status::ok ||
+        (res.result_int() >= 200 && res.result_int() < 300)) {
+        on_response({static_cast<uint32_t>(res.result_int()), beast::buffers_to_string(res.body().data())});
+    }
+    else {
+        on_response({static_cast<uint32_t>(res.result_int()), res.reason()});
+    }
+
+    // Set the timeout.
+    stream.expires_after(std::chrono::seconds(30));
+
+    // Gracefully close the socket
+    beast::error_code ec;
+    stream.socket().shutdown(tcp::socket::shutdown_both, ec);
+
+    // not_connected happens sometimes, so don't bother reporting it.
+    if(ec && ec != beast::errc::not_connected) {
+        LOG_ERROR("Socket shutdown error: {}", ec.message());
+        co_return;
+    }
+    // If we get here then the connection is closed gracefully
+}
+
+inline std::tuple<std::string, std::string, std::string, bool> Http::parse_url(std::string_view url)
 {
     std::string host;
     std::string target;
     uint_fast16_t port = (uint_fast16_t)-1;
+    bool use_ssl = true;  // Default to SSL
 
     std::string protoco("https");
     auto pos = url.find("://");
@@ -332,7 +450,7 @@ inline std::tuple<std::string, std::string, std::string> Http::parse_url(std::st
             target = std::string(url.substr(pos));
         }
     }
-    
+
     pos = host.find(':');
     if (pos != 3 && pos != 4 && pos != std::string::npos)
     {
@@ -345,7 +463,10 @@ inline std::tuple<std::string, std::string, std::string> Http::parse_url(std::st
         port = (protoco == "http") ? 80 : 443;
     }
 
-    return {host, target, std::to_string(port)};
+    // Determine if SSL should be used
+    use_ssl = (protoco == "https");
+
+    return {host, target, std::to_string(port), use_ssl};
 }
 
 inline Http::Response Http::get(std::string_view url, std::vector<std::pair<std::string, std::string>>&& headers)
@@ -662,10 +783,11 @@ inline HttpStream::HttpStream(
     , on_data_(std::move(onDataCallback))
     , on_error_(std::move(onErrorCallback))
 {
-    auto [host, target, port] = Http::parse_url(url_);
+    auto [host, target, port, use_ssl] = Http::parse_url(url_);
     host_ = std::move(host);
     target_ = std::move(target);
     port_ = std::move(port);
+    use_ssl_ = use_ssl;
 }
 
 extern "C" inline void __http_stream_signal_handler(int signal) {
@@ -739,6 +861,15 @@ inline void HttpStream::shutdown()
 }
 
 inline asio::awaitable<void> HttpStream::do_stream_session()
+{
+    if (use_ssl_) {
+        return do_stream_session_ssl();
+    } else {
+        return do_stream_session_plain();
+    }
+}
+
+inline asio::awaitable<void> HttpStream::do_stream_session_ssl()
 {
     auto executor = co_await asio::this_coro::executor;
     auto resolver = asio::ip::tcp::resolver{ executor };
@@ -822,7 +953,7 @@ inline asio::awaitable<void> HttpStream::do_stream_session()
 
         // Read body chunks continuously
         while (!should_close_.load(std::memory_order_acquire) &&
-               run_.load(std::memory_order_acquire) && 
+               run_.load(std::memory_order_acquire) &&
                status_.load(std::memory_order_acquire) == Status::CONNECTED)
         {
             // Read some data from the stream
@@ -867,6 +998,128 @@ inline asio::awaitable<void> HttpStream::do_stream_session()
 
         if(ec && ec != asio::ssl::error::stream_truncated) {
             LOG_WARN("SSL shutdown warning: {}", ec.message());
+        }
+    }
+    catch (const std::exception& e) {
+        LOG_ERROR("HttpStream exception: {}", e.what());
+        on_error_(e.what());
+    }
+
+    status_.store(Status::DISCONNECTED, std::memory_order_release);
+    on_disconnected_();
+}
+
+inline asio::awaitable<void> HttpStream::do_stream_session_plain()
+{
+    auto executor = co_await asio::this_coro::executor;
+    auto resolver = asio::ip::tcp::resolver{ executor };
+    auto stream = beast::tcp_stream{ executor };
+
+    try {
+        // Look up the domain name
+        auto const results = co_await resolver.async_resolve(host_, port_);
+
+        // Set the timeout
+        stream.expires_after(std::chrono::seconds(30));
+
+        // Make the connection
+        co_await stream.async_connect(results);
+
+        // Set up an HTTP GET request for streaming
+        http::request<http::string_body> req{ http::verb::get, target_, 11 };
+        req.set(http::field::host, host_);
+        req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+        req.set(http::field::accept, "text/event-stream");
+        req.set(http::field::cache_control, "no-cache");
+
+        // Set custom headers
+        for (auto &header_pair : headers_) {
+            req.set(header_pair.first, header_pair.second);
+        }
+
+        // Disable timeout for streaming
+        stream.expires_never();
+
+        // Send the HTTP request
+        co_await http::async_write(stream, req);
+
+        // Read response header first
+        beast::flat_buffer buffer;
+        http::response_parser<http::dynamic_body> parser;
+        parser.body_limit(std::numeric_limits<std::uint64_t>::max());
+
+        // Read just the header
+        co_await http::async_read_header(stream, buffer, parser);
+
+        auto& res = parser.get();
+
+        if (res.result() != http::status::ok) {
+            LOG_ERROR("HTTP Stream failed with status: {}", static_cast<int>(res.result()));
+            on_error_(std::format("HTTP error: {}", std::string(res.reason())));
+            status_.store(Status::DISCONNECTED, std::memory_order_release);
+            on_disconnected_();
+            co_return;
+        }
+
+        // Connection established successfully
+        status_.store(Status::CONNECTED, std::memory_order_release);
+        on_connected_();
+
+        // Check if this is SSE format
+        bool is_sse = false;
+        auto content_type = res[http::field::content_type];
+        if (content_type.find("text/event-stream") != std::string::npos) {
+            is_sse = true;
+        }
+
+        // Read body chunks continuously
+        while (!should_close_.load(std::memory_order_acquire) &&
+               run_.load(std::memory_order_acquire) &&
+               status_.load(std::memory_order_acquire) == Status::CONNECTED)
+        {
+            // Read some data from the stream
+            auto [ec, bytes_transferred] = co_await stream.async_read_some(
+                buffer.prepare(8192),
+                asio::as_tuple(asio::use_awaitable)
+            );
+
+            if (ec == http::error::end_of_stream || ec == asio::error::eof) {
+                // Stream ended gracefully
+                LOG_INFO("HTTP Stream ended");
+                break;
+            }
+            else if (ec) {
+                LOG_ERROR("HTTP Stream read error: {}", ec.message());
+                on_error_(ec.message());
+                break;
+            }
+
+            // Commit the received data to the buffer
+            buffer.commit(bytes_transferred);
+
+            // Convert buffer to string
+            auto data_view = beast::buffers_to_string(buffer.data());
+
+            if (!data_view.empty()) {
+                if (is_sse) {
+                    parse_sse_chunk(data_view.data(), data_view.size());
+                } else {
+                    // Raw chunked data
+                    on_data_(data_view.data(), data_view.size());
+                }
+
+                // Clear the consumed data
+                buffer.consume(buffer.size());
+            }
+        }
+
+        // Graceful shutdown
+        stream.expires_after(std::chrono::seconds(5));
+        beast::error_code ec;
+        stream.socket().shutdown(tcp::socket::shutdown_both, ec);
+
+        if(ec && ec != beast::errc::not_connected) {
+            LOG_WARN("Socket shutdown warning: {}", ec.message());
         }
     }
     catch (const std::exception& e) {

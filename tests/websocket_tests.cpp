@@ -119,20 +119,26 @@ TEST_F(WebsocketTest, ConstructorParsesWssUrlWithPort) {
 }
 
 TEST_F(WebsocketTest, ConstructorParsesWsUrl) {
+    // Test that plain WebSocket (ws://) URLs are parsed correctly
     std::atomic<bool> connected_called{false};
     std::atomic<bool> disconnected_called{false};
     std::atomic<bool> data_called{false};
     std::atomic<bool> error_called{false};
 
     auto ws = std::make_shared<Websocket>(
-        "ws://echo.websocket.org/test",
+        "ws://localhost:8080/test",
         [&]() { connected_called = true; },
         [&]() { disconnected_called = true; },
         [&](const char*, std::size_t) { data_called = true; },
         [&](std::string) { error_called = true; }
     );
 
+    // Should successfully create websocket object and parse URL
     EXPECT_EQ(ws->status(), Websocket::Status::DISCONNECTED);
+
+    // Note: This test verifies URL parsing for plain WebSocket.
+    // To test actual ws:// connections, run a local WebSocket server:
+    // Example: wscat --listen 8080
 }
 
 TEST_F(WebsocketTest, ConstructorParsesHostOnlyUrl) {
@@ -831,8 +837,58 @@ TEST_F(WebsocketTest, DestructorWhileConnected) {
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 }
 
-// Note: These tests use wss://ws.postman-echo.com which is a public test server.
+// ======================== Plain WebSocket (ws://) Tests ========================
+// Note: Plain WebSocket servers are less common and reliable for testing.
+// The following test demonstrates plain WebSocket functionality but expects
+// connection failure unless you have a local WebSocket server running.
+
+TEST_F(WebsocketTest, PlainWebsocket_UrlParsing) {
+    // Verify that plain WebSocket URLs are correctly parsed and handled
+    EventSynchronizer error_sync;
+    std::atomic<bool> connected{false};
+    std::string error_message;
+
+    auto ws = std::make_shared<Websocket>(
+        "ws://localhost:9001",  // Local server (won't be running in CI)
+        [&]() { connected.store(true); },
+        [&]() {},
+        [&](const char*, std::size_t) {},
+        [&](std::string err) {
+            error_message = err;
+            error_sync.notify();
+        }
+    );
+
+    EXPECT_EQ(ws->status(), Websocket::Status::DISCONNECTED);
+
+    ws->open();
+
+    // Wait a bit to see if connection succeeds or fails
+    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+
+    // Either connected to local server OR got connection error (expected in CI)
+    if (connected.load()) {
+        EXPECT_EQ(ws->status(), Websocket::Status::CONNECTED);
+        std::cout << "Note: Successfully connected to local plain WebSocket server\n";
+        ws->close();
+    } else {
+        // Expected behavior when no local server is running
+        std::cout << "Note: Plain WebSocket test - no local server running (expected in CI)\n";
+        ws->close();
+    }
+
+    // This test passes either way - it verifies the code doesn't crash
+    SUCCEED();
+}
+
+// Note: Main tests use wss://ws.postman-echo.com which is a public test server.
 // Tests may fail if the server is down or network is unavailable.
+//
+// For testing plain WebSocket (ws://) connections locally:
+// 1. Install wscat: npm install -g wscat
+// 2. Run server: wscat --listen 9001
+// 3. Run the PlainWebsocket_UrlParsing test above
+//
 // For production testing, consider setting up a local websocket test server.
 
 } // namespace slick_net

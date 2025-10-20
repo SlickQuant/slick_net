@@ -58,6 +58,21 @@ TEST_F(HttpTest, SyncGet_BasicRequest) {
     });
 }
 
+TEST_F(HttpTest, SyncGet_PlainHttp) {
+    // Test plain HTTP (non-SSL) connection
+    auto response = Http::get("http://httpbun.com/get");
+
+    EXPECT_TRUE(response.is_ok()) << "Status: " << response.result_code << ", Response: " << response.result_text;
+    EXPECT_EQ(response.result_code, 200);
+    EXPECT_FALSE(response.result_text.empty());
+
+    // Verify it's valid JSON
+    EXPECT_NO_THROW({
+        auto json = nlohmann::json::parse(response.result_text);
+        EXPECT_TRUE(json.contains("url"));
+    });
+}
+
 TEST_F(HttpTest, SyncGet_WithCustomHeaders) {
     auto response = Http::get("https://jsonplaceholder.typicode.com/posts/1", {
         {"X-Custom-Header", "test-value"},
@@ -110,6 +125,26 @@ TEST_F(HttpTest, SyncPost_JsonData) {
     EXPECT_EQ(json["userId"], 1);
 }
 
+TEST_F(HttpTest, SyncPost_PlainHttp) {
+    // Test plain HTTP (non-SSL) POST request
+    nlohmann::json post_data = {
+        {"test", "plain http post"},
+        {"value", 42}
+    };
+
+    auto response = Http::post("http://httpbun.com/post",
+                               post_data.dump(),
+                               {{"Content-Type", "application/json"}});
+
+    EXPECT_TRUE(response.is_ok()) << "Status: " << response.result_code << ", Response: " << response.result_text;
+    EXPECT_EQ(response.result_code, 200);
+
+    auto json = nlohmann::json::parse(response.result_text);
+    EXPECT_TRUE(json.contains("json"));
+    EXPECT_EQ(json["json"]["test"], "plain http post");
+    EXPECT_EQ(json["json"]["value"], 42);
+}
+
 TEST_F(HttpTest, SyncPost_EmptyBody) {
     nlohmann::json empty_data = nlohmann::json::object();
     auto response = Http::post("https://jsonplaceholder.typicode.com/posts",
@@ -153,6 +188,25 @@ TEST_F(HttpTest, SyncPut_UpdateResource) {
     auto json = nlohmann::json::parse(response.result_text);
     EXPECT_EQ(json["id"], 1);
     EXPECT_EQ(json["title"], "Updated Title");
+}
+
+TEST_F(HttpTest, SyncPut_PlainHttp) {
+    // Test plain HTTP (non-SSL) PUT request
+    nlohmann::json put_data = {
+        {"updated", true},
+        {"timestamp", 1234567890}
+    };
+
+    auto response = Http::put("http://httpbun.com/put",
+                              put_data.dump(),
+                              {{"Content-Type", "application/json"}});
+
+    EXPECT_TRUE(response.is_ok()) << "Status: " << response.result_code << ", Response: " << response.result_text;
+    EXPECT_EQ(response.result_code, 200);
+
+    auto json = nlohmann::json::parse(response.result_text);
+    EXPECT_TRUE(json.contains("json"));
+    EXPECT_EQ(json["json"]["updated"], true);
 }
 
 // ======================== Synchronous PATCH Tests ========================
@@ -225,6 +279,26 @@ TEST_F(HttpTest, AsyncGet_BasicRequest) {
         EXPECT_TRUE(json.contains("title"));
         EXPECT_TRUE(json.contains("body"));
     });
+}
+
+TEST_F(HttpTest, AsyncGet_PlainHttp) {
+    // Test plain HTTP (non-SSL) async GET request
+    std::atomic<bool> completed{false};
+    Http::Response async_response;
+
+    Http::async_get([&](Http::Response&& response) {
+        async_response = std::move(response);
+        completed.store(true);
+    }, "http://httpbun.com/get");
+
+    EXPECT_TRUE(wait_for_condition([&]() { return completed.load(); },
+                                    std::chrono::seconds(10)));
+
+    EXPECT_TRUE(async_response.is_ok()) << "Status: " << async_response.result_code;
+    EXPECT_EQ(async_response.result_code, 200);
+
+    auto json = nlohmann::json::parse(async_response.result_text);
+    EXPECT_TRUE(json.contains("url"));
 }
 
 TEST_F(HttpTest, AsyncGet_WithHeaders) {
