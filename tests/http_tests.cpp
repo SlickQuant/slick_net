@@ -11,9 +11,9 @@
 // #define LOG_INFO(fmt, ...) std::cout << std::format("{:%Y-%m-%d %H:%M:%S} ", std::chrono::system_clock::now()) << "[INFO] " << std::format(fmt, __VA_ARGS__) << std::endl
 // #define LOG_ERROR(fmt, ...) std::cout << std::format("{:%Y-%m-%d %H:%M:%S} ", std::chrono::system_clock::now()) << "[ERROR] " << std::format(fmt, __VA_ARGS__) << std::endl
 
-#include <slick_net/http.h>
+#include <slick/net/http.h>
 
-namespace slick_net {
+namespace slick::net {
 
 // Test fixture for HTTP tests
 class HttpTest : public ::testing::Test {
@@ -696,4 +696,4 @@ TEST_F(HttpTest, HttpStream_StatusCheck) {
     EXPECT_EQ(stream->status(), HttpStream::Status::DISCONNECTED);
 }
 
-} // namespace slick_net
+} // namespace slick::net

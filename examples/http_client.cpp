@@ -1,9 +1,9 @@
-#include <slick_logger/logger.hpp>  // must be included before <slick_net/websocket.h>
-#include <slick_net/http.h>
+#include <slick/logger.hpp>  // must be included before <slick/net/websocket.h>
+#include <slick/net/http.h>
 #include <nlohmann/json.hpp>
 
-using namespace slick_net;
-using namespace slick_logger;
+using namespace slick::net;
+using namespace slick::logger;
 
 namespace {
     std::atomic_uint_fast32_t pending_async_requests{4};

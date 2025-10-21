@@ -1,10 +1,10 @@
-#include <slick_logger/logger.hpp>  // must be included before <slick_net/http.h>
-#include <slick_net/http.h>
+#include <slick/logger.hpp>  // must be included before <slick/net/http.h>
+#include <slick/net/http.h>
 #include <thread>
 #include <nlohmann/json.hpp>
 
-using namespace slick_net;
-using namespace slick_logger;
+using namespace slick::net;
+using namespace slick::logger;
 
 // slick_logger defines LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERROR, LOG_TRACE macros
 

@@ -1,13 +1,13 @@
-#include <slick_logger/logger.hpp>  // must be included before <slick_net/websocket.h>
-#include <slick_net/websocket.h>
+#include <slick/logger.hpp>  // must be included before <slick/net/websocket.h>
+#include <slick/net/websocket.h>
 #include <thread>
 #include <nlohmann/json.hpp>
-using namespace slick_net;
-using namespace slick_logger;
+using namespace slick::net;
+using namespace slick::logger;
 
 // slick_logger defines LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERROR, LOG_TRACE macros
 
-// User can assign their own log functions by defining these macros before including <slick_net/websocket.h>
+// User can assign their own log functions by defining these macros before including <slick/net/websocket.h>
 // The log functions must support fmt-style formatting
 // e.g. LOG_INFO("Hello {}", "world");
 
@@ -31,8 +31,8 @@ int main()
         })"_json,
     };
 
-    std::shared_ptr<slick_net::Websocket> ws;
-    ws = std::make_shared<slick_net::Websocket>(
+    std::shared_ptr<slick::net::Websocket> ws;
+    ws = std::make_shared<slick::net::Websocket>(
         // "wss://ws.postman-echo.com/raw",
         "wss://advanced-trade-ws.coinbase.com",
         [&](){ 

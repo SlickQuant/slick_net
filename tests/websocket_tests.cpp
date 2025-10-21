@@ -16,9 +16,9 @@
 // #define LOG_ERROR(fmt, ...) std::cout << std::format("{:%Y-%m-%d %H:%M:%S} ", std::chrono::system_clock::now()) << "[ERROR] " << std::format(fmt, __VA_ARGS__) << std::endl
 // #define LOG_TRACE(fmt, ...) std::cout << std::format("{:%Y-%m-%d %H:%M:%S} ", std::chrono::system_clock::now()) << "[TRACE] " << std::format(fmt, __VA_ARGS__) << std::endl
 
-#include <slick_net/websocket.h>
+#include <slick/net/websocket.h>
 
-namespace slick_net {
+namespace slick::net {
 
 // Mock callbacks for testing
 class MockWebsocketCallbacks {
@@ -891,4 +891,4 @@ TEST_F(WebsocketTest, PlainWebsocket_UrlParsing) {
 //
 // For production testing, consider setting up a local websocket test server.
 
-} // namespace slick_net
+} // namespace slick::net

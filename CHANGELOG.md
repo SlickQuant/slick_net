@@ -1,4 +1,10 @@
-# [1.1.0.0] - 2025-010-19
+# [1.1.0.1] - 2025-10-21
+
+- Update slick_queue to v1.1.0.2
+- Change namespace from slick_net to slick::net
+- Change include folder structure from include/slick_net to include/slick/net
+
+# [1.1.0.0] - 2025-10-19
 
 - Added plain WebSocket (ws://) and plain Http (http://) protocol support
 - Added Comprehensive test coverage for plain HTTP (non-SSL) client

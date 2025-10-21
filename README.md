@@ -50,10 +50,10 @@ target_link_libraries(your_target PRIVATE slick_net)
 ### Basic WebSocket Client
 
 ```cpp
-#include <slick_net/websocket.h>
+#include <slick/net/websocket.h>
 #include <memory>
 
-using namespace slick_net;
+using namespace slick::net;
 
 int main() {
     auto ws = std::make_shared<Websocket>(
@@ -90,11 +90,11 @@ int main() {
 ### Advanced Usage with JSON
 
 ```cpp
-#include <slick_net/websocket.h>
+#include <slick/net/websocket.h>
 #include <nlohmann/json.hpp>
 #include <memory>
 
-using namespace slick_net;
+using namespace slick::net;
 using json = nlohmann::json;
 
 int main() {
@@ -186,7 +186,7 @@ struct Response {
 
 **Example Usage:**
 ```cpp
-#include <slick_net/http.h>
+#include <slick/net/http.h>
 
 // Synchronous GET
 auto response = Http::get("https://api.example.com/data");
@@ -259,7 +259,7 @@ HttpStream(
 
 **Example Usage - Server-Sent Events (SSE):**
 ```cpp
-#include <slick_net/http.h>
+#include <slick/net/http.h>
 
 auto stream = std::make_shared<HttpStream>(
     "https://api.example.com/events",
@@ -287,7 +287,7 @@ stream->close();
 
 **Example Usage - OpenAI Streaming API:**
 ```cpp
-#include <slick_net/http.h>
+#include <slick/net/http.h>
 #include <nlohmann/json.hpp>
 
 auto stream = std::make_shared<HttpStream>(
@@ -330,3 +330,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Author
 
 Part of the [SlickQuant](https://github.com/SlickQuant) ecosystem.
+
+**Made with ⚡ by [SlickQuant](https://github.com/SlickQuant)**

@@ -7,7 +7,7 @@ if (MSVC)
     endif()
 endif()
 
-set(BUILD_VERSION 1.1.0.0)
+set(BUILD_VERSION 1.1.0.1)
 project(slick_net VERSION ${BUILD_VERSION} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -28,7 +28,7 @@ set(BUILD_SLICK_QUEUE_TESTS OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
     slick_queue
     GIT_REPOSITORY https://github.com/SlickQuant/slick_queue.git
-    GIT_TAG v1.0.2.1
+    GIT_TAG v1.1.0.2
 )
 FetchContent_MakeAvailable(slick_queue)
 
@@ -43,7 +43,33 @@ target_include_directories(slick_net INTERFACE
     $<INSTALL_INTERFACE:include>
 )
 target_link_libraries(slick_net INTERFACE slick_logger slick_queue Boost::asio Boost::beast Boost::context OpenSSL::SSL OpenSSL::Crypto)
-target_precompile_headers(slick_net INTERFACE include/slick_net/pch.h)
+target_precompile_headers(slick_net INTERFACE
+    # Standard library headers
+    <atomic>
+    <cstdlib>
+    <functional>
+    <unordered_map>
+    <mutex>
+    <csignal>
+    <thread>
+    # Boost headers
+    <boost/beast/core.hpp>
+    <boost/beast/websocket.hpp>
+    <boost/beast/websocket/ssl.hpp>
+    <boost/beast/http.hpp>
+    <boost/asio/ssl.hpp>
+    <boost/asio/strand.hpp>
+    <boost/asio/awaitable.hpp>
+    <boost/asio/co_spawn.hpp>
+    <boost/asio/signal_set.hpp>
+    <boost/asio/ip/tcp.hpp>
+    <boost/asio/ssl/stream.hpp>
+    <boost/asio/connect.hpp>
+    <boost/asio/post.hpp>
+    <boost/asio/as_tuple.hpp>
+    # External dependencies
+    <slick/queue.h>
+)
 
 if (MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "-O2")
