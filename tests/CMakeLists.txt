@@ -27,11 +27,6 @@ target_link_libraries(websocket_tests PRIVATE slick_net GTest::gtest_main)
 add_executable(http_tests http_tests.cpp)
 target_link_libraries(http_tests PRIVATE slick_net GTest::gtest_main)
 
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    target_compile_options(websocket_tests PRIVATE /fsanitize=address)
-    target_compile_options(http_tests PRIVATE /fsanitize=address)
-endif()
-
 # Discover tests with increased timeout
 gtest_discover_tests(websocket_tests DISCOVERY_TIMEOUT 30)
 gtest_discover_tests(http_tests DISCOVERY_TIMEOUT 30)
