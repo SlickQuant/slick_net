@@ -81,7 +81,7 @@ if (MSVC)
         set_target_properties(slick_net PROPERTIES MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     endif()
 else()
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -flto")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native")
 endif()
 
 option(ENABLE_ASAN "Enable AddressSanitizer" OFF)
