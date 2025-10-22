@@ -1,5 +1,5 @@
 
-find_package(GTest REQUIRED)
+find_package(GTest CONFIG QUIET)
 
 if (GTest_FOUND)
     message(STATUS "GTest found: ${GTest_VERSION}")
