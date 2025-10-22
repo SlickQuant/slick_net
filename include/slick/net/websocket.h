@@ -45,7 +45,7 @@
 #include <boost/asio/connect.hpp>
 #include <boost/asio/post.hpp>
 #include <boost/asio/as_tuple.hpp>
-#include <slick/slick_queue.h>
+#include <slick/queue.h>
 
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
