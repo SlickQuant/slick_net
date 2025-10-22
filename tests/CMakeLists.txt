@@ -6,15 +6,20 @@ if (GTest_FOUND)
 else()
     include(FetchContent)
     FetchContent_Declare(
-    googletest
-    URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+        googletest
+        GIT_REPOSITORY https://github.com/google/googletest.git
+        GIT_TAG v1.17.0
     )
-    # For Windows: Prevent overriding the parent project's compiler/linker on Windows
-    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    if (WIN32)
+        # For Windows: Prevent overriding the parent project's compiler/linker on Windows
+        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    endif()
     FetchContent_MakeAvailable(googletest)
 endif()
 
 enable_testing()
+
+include(GoogleTest)
 
 add_executable(websocket_tests websocket_tests.cpp)
 target_link_libraries(websocket_tests PRIVATE slick_net GTest::gtest_main)
@@ -27,5 +32,15 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_compile_options(http_tests PRIVATE /fsanitize=address)
 endif()
 
-add_test(NAME WebsocketTests COMMAND websocket_tests)
-add_test(NAME HttpTests COMMAND http_tests)
+# Discover tests with increased timeout
+gtest_discover_tests(websocket_tests DISCOVERY_TIMEOUT 30)
+gtest_discover_tests(http_tests DISCOVERY_TIMEOUT 30)
+
+# Set test properties
+set_target_properties(websocket_tests PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
+)
+
+set_target_properties(http_tests PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
+)
