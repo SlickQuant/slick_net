@@ -1,5 +1,10 @@
 # slick_net
 
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![CI](https://github.com/SlickQuant/slick_net/actions/workflows/ci.yml/badge.svg)](https://github.com/SlickQuant/slick_net/actions/workflows/ci.yml)
+[![GitHub release](https://img.shields.io/github/v/release/SlickQuant/slick_net)](https://github.com/SlickQuant/slick_net/releases)
+
 A high-performance C++ HTTP/WebSocket client library built on Boost.Beast with full SSL/TLS support. Designed for asynchronous, non-blocking HTTP/WebSocket communication in modern C++ applications.
 
 ## Features
