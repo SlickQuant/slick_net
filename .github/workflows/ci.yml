@@ -44,14 +44,18 @@ jobs:
         cd ${{ github.workspace }}/vcpkg
         git checkout master
 
-    - name: Bootstrap vcpkg
+    - name: Bootstrap vcpkg (Windows)
+      if: runner.os == 'Windows'
       run: |
-        if [ "$RUNNER_OS" == "Windows" ]; then
-          ${{ github.workspace }}/vcpkg/bootstrap-vcpkg.bat
-        else
-          ${{ github.workspace }}/vcpkg/bootstrap-vcpkg.sh
-        fi
-      shell: bash
+        cd ${{ github.workspace }}/vcpkg
+        .\bootstrap-vcpkg.bat
+      shell: pwsh
+
+    - name: Bootstrap vcpkg (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: |
+        cd ${{ github.workspace }}/vcpkg
+        ./bootstrap-vcpkg.sh
 
     - name: Install vcpkg dependencies
       run: |
