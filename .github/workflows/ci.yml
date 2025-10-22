@@ -42,7 +42,7 @@ jobs:
       run: |
         git clone https://github.com/Microsoft/vcpkg.git ${{ github.workspace }}/vcpkg
         cd ${{ github.workspace }}/vcpkg
-        git checkout 8eb57401bf10e149a917605e6d85244fdccf21eb
+        git checkout master
 
     - name: Bootstrap vcpkg
       run: |
