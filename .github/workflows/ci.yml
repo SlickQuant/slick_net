@@ -38,12 +38,20 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11
-      with:
-        vcpkgDirectory: ${{ github.workspace }}/vcpkg
-        vcpkgGitCommitId: 8eb57401bf10e149a917605e6d85244fdccf21eb
-        appendedCacheKey: ${{ hashFiles( '**/vcpkg.json' ) }}
+    - name: Setup vcpkg (using git clone)
+      run: |
+        git clone https://github.com/Microsoft/vcpkg.git ${{ github.workspace }}/vcpkg
+        cd ${{ github.workspace }}/vcpkg
+        git checkout 8eb57401bf10e149a917605e6d85244fdccf21eb
+
+    - name: Bootstrap vcpkg
+      run: |
+        if [ "$RUNNER_OS" == "Windows" ]; then
+          ${{ github.workspace }}/vcpkg/bootstrap-vcpkg.bat
+        else
+          ${{ github.workspace }}/vcpkg/bootstrap-vcpkg.sh
+        fi
+      shell: bash
 
     - name: Install vcpkg dependencies
       run: |
