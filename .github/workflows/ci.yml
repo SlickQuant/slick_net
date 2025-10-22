@@ -59,7 +59,7 @@ jobs:
 
     - name: Install vcpkg dependencies
       run: |
-        ${{ github.workspace }}/vcpkg/vcpkg install boost-beast openssl nlohmann-json --triplet ${{ matrix.triplet }}
+        ${{ github.workspace }}/vcpkg/vcpkg install boost-beast openssl nlohmann-json gtest --triplet ${{ matrix.triplet }}
 
     - name: Configure CMake
       run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
