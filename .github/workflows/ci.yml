@@ -61,7 +61,7 @@ jobs:
       env:
         VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
       run: |
-        ${{ github.workspace }}/vcpkg/vcpkg install "boost[asio,beast,context]" openssl nlohmann-json gtest
+        ${{ github.workspace }}/vcpkg/vcpkg install boost-asio boost-beast boost-context boost-system openssl nlohmann-json gtest
 
     - name: Configure CMake
       run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
