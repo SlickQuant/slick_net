@@ -27,10 +27,10 @@ jobs:
             triplet: x64-windows
             build_type: Debug
           - os: macos-latest
-            triplet: x64-osx
+            triplet: arm64-osx
             build_type: Release
           - os: macos-latest
-            triplet: x64-osx
+            triplet: arm64-osx
             build_type: Debug
 
     runs-on: ${{ matrix.os }}
