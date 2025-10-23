@@ -1,3 +1,8 @@
+# [1.1.1] - 2025-10-22
+- Fix slick_queue header include
+- Fix GitHub CI builds
+- Change Version to 3 digits
+
 # [1.1.0.1] - 2025-10-21
 
 - Update slick_queue to v1.1.0.2

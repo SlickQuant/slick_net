@@ -7,7 +7,7 @@ if (MSVC)
     endif()
 endif()
 
-set(BUILD_VERSION 1.1.0.1)
+set(BUILD_VERSION 1.1.1)
 project(slick_net VERSION ${BUILD_VERSION} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
