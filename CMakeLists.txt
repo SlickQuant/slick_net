@@ -7,7 +7,7 @@ if (MSVC)
     endif()
 endif()
 
-set(BUILD_VERSION 1.1.1)
+set(BUILD_VERSION 1.1.2)
 project(slick_net VERSION ${BUILD_VERSION} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -42,7 +42,7 @@ target_include_directories(slick_net INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(slick_net INTERFACE slick_logger slick_queue Boost::asio Boost::beast Boost::context OpenSSL::SSL OpenSSL::Crypto)
+target_link_libraries(slick_net INTERFACE slick_queue Boost::asio Boost::beast Boost::context OpenSSL::SSL OpenSSL::Crypto)
 target_precompile_headers(slick_net INTERFACE
     # Standard library headers
     <atomic>

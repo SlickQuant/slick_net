@@ -1,3 +1,7 @@
+# [1.1.2] - 2025-11-13
+- Remove unnecessary slick_logger from slick_net link dependencies 
+- Update CMakeLists to link slick_logger with example executables
+
 # [1.1.1] - 2025-10-22
 - Fix slick_queue header include
 - Fix GitHub CI builds
