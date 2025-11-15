@@ -28,7 +28,7 @@ set(BUILD_SLICK_QUEUE_TESTS OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
     slick_queue
     GIT_REPOSITORY https://github.com/SlickQuant/slick_queue.git
-    GIT_TAG v1.1.0.2
+    GIT_TAG v1.1.2
 )
 FetchContent_MakeAvailable(slick_queue)
 
@@ -38,11 +38,12 @@ message(STATUS "Beast: ${boost_beast_CONFIG}")
 
 # Add header-only library
 add_library(slick_net INTERFACE)
+add_library(slic::slick_net ALIAS slick_net)
 target_include_directories(slick_net INTERFACE 
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(slick_net INTERFACE slick_queue Boost::asio Boost::beast Boost::context OpenSSL::SSL OpenSSL::Crypto)
+target_link_libraries(slick_net INTERFACE slick::slick_queue Boost::asio Boost::beast Boost::context OpenSSL::SSL OpenSSL::Crypto)
 target_precompile_headers(slick_net INTERFACE
     # Standard library headers
     <atomic>
