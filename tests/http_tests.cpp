@@ -696,4 +696,537 @@ TEST_F(HttpTest, HttpStream_StatusCheck) {
     EXPECT_EQ(stream->status(), HttpStream::Status::DISCONNECTED);
 }
 
+// ======================== Awaitable GET Tests ========================
+
+TEST_F(HttpTest, AwaitableGet_BasicRequest) {
+    asio::io_context ioc;
+    Http::Response awaitable_response;
+    std::atomic<bool> completed{false};
+
+    asio::co_spawn(
+        ioc,
+        [&]() -> asio::awaitable<void> {
+            awaitable_response = co_await Http::async_get("https://jsonplaceholder.typicode.com/posts/1");
+            completed.store(true);
+        }(),
+        [](std::exception_ptr e) {
+            if (e) {
+                try {
+                    std::rethrow_exception(e);
+                } catch (const std::exception& ex) {
+                    FAIL() << "Exception in coroutine: " << ex.what();
+                }
+            }
+        }
+    );
+
+    ioc.run();
+
+    EXPECT_TRUE(completed.load());
+    EXPECT_TRUE(awaitable_response.is_ok()) << "Status: " << awaitable_response.result_code << ", Response: " << awaitable_response.result_text;
+    EXPECT_EQ(awaitable_response.result_code, 200);
+    EXPECT_FALSE(awaitable_response.result_text.empty());
+
+    // Verify it's valid JSON
+    EXPECT_NO_THROW({
+        auto json = nlohmann::json::parse(awaitable_response.result_text);
+        EXPECT_TRUE(json.contains("userId"));
+        EXPECT_TRUE(json.contains("id"));
+        EXPECT_TRUE(json.contains("title"));
+        EXPECT_TRUE(json.contains("body"));
+    });
+}
+
+TEST_F(HttpTest, AwaitableGet_PlainHttp) {
+    asio::io_context ioc;
+    Http::Response awaitable_response;
+    std::atomic<bool> completed{false};
+
+    asio::co_spawn(
+        ioc,
+        [&]() -> asio::awaitable<void> {
+            awaitable_response = co_await Http::async_get("http://httpbun.com/get");
+            completed.store(true);
+        }(),
+        [](std::exception_ptr e) {
+            if (e) {
+                try {
+                    std::rethrow_exception(e);
+                } catch (const std::exception& ex) {
+                    FAIL() << "Exception in coroutine: " << ex.what();
+                }
+            }
+        }
+    );
+
+    ioc.run();
+
+    EXPECT_TRUE(completed.load());
+    EXPECT_TRUE(awaitable_response.is_ok()) << "Status: " << awaitable_response.result_code;
+    EXPECT_EQ(awaitable_response.result_code, 200);
+
+    auto json = nlohmann::json::parse(awaitable_response.result_text);
+    EXPECT_TRUE(json.contains("url"));
+}
+
+TEST_F(HttpTest, AwaitableGet_WithCustomHeaders) {
+    asio::io_context ioc;
+    Http::Response awaitable_response;
+    std::atomic<bool> completed{false};
+
+    asio::co_spawn(
+        ioc,
+        [&]() -> asio::awaitable<void> {
+            awaitable_response = co_await Http::async_get(
+                "https://jsonplaceholder.typicode.com/posts/1",
+                {{"X-Custom-Header", "test-value"}, {"Accept", "application/json"}}
+            );
+            completed.store(true);
+        }(),
+        [](std::exception_ptr e) {
+            if (e) {
+                try {
+                    std::rethrow_exception(e);
+                } catch (const std::exception& ex) {
+                    FAIL() << "Exception in coroutine: " << ex.what();
+                }
+            }
+        }
+    );
+
+    ioc.run();
+
+    EXPECT_TRUE(completed.load());
+    EXPECT_TRUE(awaitable_response.is_ok()) << "Status: " << awaitable_response.result_code;
+    EXPECT_EQ(awaitable_response.result_code, 200);
+
+    auto json = nlohmann::json::parse(awaitable_response.result_text);
+    EXPECT_TRUE(json.contains("id"));
+}
+
+TEST_F(HttpTest, AwaitableGet_404NotFound) {
+    asio::io_context ioc;
+    Http::Response awaitable_response;
+    std::atomic<bool> completed{false};
+
+    asio::co_spawn(
+        ioc,
+        [&]() -> asio::awaitable<void> {
+            awaitable_response = co_await Http::async_get("https://jsonplaceholder.typicode.com/posts/999999");
+            completed.store(true);
+        }(),
+        [](std::exception_ptr e) {
+            if (e) {
+                try {
+                    std::rethrow_exception(e);
+                } catch (const std::exception& ex) {
+                    FAIL() << "Exception in coroutine: " << ex.what();
+                }
+            }
+        }
+    );
+
+    ioc.run();
+
+    EXPECT_TRUE(completed.load());
+    EXPECT_FALSE(awaitable_response.is_ok()) << "Expected 404, got: " << awaitable_response.result_code;
+    EXPECT_EQ(awaitable_response.result_code, 404);
+}
+
+// ======================== Awaitable POST Tests ========================
+
+TEST_F(HttpTest, AwaitablePost_JsonData) {
+    asio::io_context ioc;
+    Http::Response awaitable_response;
+    std::atomic<bool> completed{false};
+
+    nlohmann::json post_data = {
+        {"title", "Awaitable POST test"},
+        {"body", "Testing awaitable POST"},
+        {"userId", 1}
+    };
+
+    asio::co_spawn(
+        ioc,
+        [&]() -> asio::awaitable<void> {
+            awaitable_response = co_await Http::async_post(
+                "https://jsonplaceholder.typicode.com/posts",
+                post_data.dump(),
+                {{"Content-Type", "application/json"}}
+            );
+            completed.store(true);
+        }(),
+        [](std::exception_ptr e) {
+            if (e) {
+                try {
+                    std::rethrow_exception(e);
+                } catch (const std::exception& ex) {
+                    FAIL() << "Exception in coroutine: " << ex.what();
+                }
+            }
+        }
+    );
+
+    ioc.run();
+
+    EXPECT_TRUE(completed.load());
+    EXPECT_TRUE(awaitable_response.is_ok()) << "Status: " << awaitable_response.result_code;
+    EXPECT_EQ(awaitable_response.result_code, 201);
+
+    auto json = nlohmann::json::parse(awaitable_response.result_text);
+    EXPECT_TRUE(json.contains("id"));
+    EXPECT_EQ(json["title"], "Awaitable POST test");
+    EXPECT_EQ(json["body"], "Testing awaitable POST");
+}
+
+TEST_F(HttpTest, AwaitablePost_PlainHttp) {
+    asio::io_context ioc;
+    Http::Response awaitable_response;
+    std::atomic<bool> completed{false};
+
+    nlohmann::json post_data = {
+        {"test", "awaitable plain http post"},
+        {"value", 42}
+    };
+
+    asio::co_spawn(
+        ioc,
+        [&]() -> asio::awaitable<void> {
+            awaitable_response = co_await Http::async_post(
+                "http://httpbun.com/post",
+                post_data.dump(),
+                {{"Content-Type", "application/json"}}
+            );
+            completed.store(true);
+        }(),
+        [](std::exception_ptr e) {
+            if (e) {
+                try {
+                    std::rethrow_exception(e);
+                } catch (const std::exception& ex) {
+                    FAIL() << "Exception in coroutine: " << ex.what();
+                }
+            }
+        }
+    );
+
+    ioc.run();
+
+    EXPECT_TRUE(completed.load());
+    EXPECT_TRUE(awaitable_response.is_ok()) << "Status: " << awaitable_response.result_code;
+    EXPECT_EQ(awaitable_response.result_code, 200);
+
+    auto json = nlohmann::json::parse(awaitable_response.result_text);
+    EXPECT_TRUE(json.contains("json"));
+    EXPECT_EQ(json["json"]["test"], "awaitable plain http post");
+}
+
+// ======================== Awaitable PUT Tests ========================
+
+TEST_F(HttpTest, AwaitablePut_UpdateResource) {
+    asio::io_context ioc;
+    Http::Response awaitable_response;
+    std::atomic<bool> completed{false};
+
+    nlohmann::json put_data = {
+        {"id", 1},
+        {"title", "Awaitable PUT test"},
+        {"body", "Testing awaitable PUT"},
+        {"userId", 1}
+    };
+
+    asio::co_spawn(
+        ioc,
+        [&]() -> asio::awaitable<void> {
+            awaitable_response = co_await Http::async_put(
+                "https://jsonplaceholder.typicode.com/posts/1",
+                put_data.dump(),
+                {{"Content-Type", "application/json"}}
+            );
+            completed.store(true);
+        }(),
+        [](std::exception_ptr e) {
+            if (e) {
+                try {
+                    std::rethrow_exception(e);
+                } catch (const std::exception& ex) {
+                    FAIL() << "Exception in coroutine: " << ex.what();
+                }
+            }
+        }
+    );
+
+    ioc.run();
+
+    EXPECT_TRUE(completed.load());
+    EXPECT_TRUE(awaitable_response.is_ok()) << "Status: " << awaitable_response.result_code;
+    EXPECT_EQ(awaitable_response.result_code, 200);
+
+    auto json = nlohmann::json::parse(awaitable_response.result_text);
+    EXPECT_EQ(json["title"], "Awaitable PUT test");
+}
+
+TEST_F(HttpTest, AwaitablePut_PlainHttp) {
+    asio::io_context ioc;
+    Http::Response awaitable_response;
+    std::atomic<bool> completed{false};
+
+    nlohmann::json put_data = {
+        {"updated", true},
+        {"timestamp", 1234567890}
+    };
+
+    asio::co_spawn(
+        ioc,
+        [&]() -> asio::awaitable<void> {
+            awaitable_response = co_await Http::async_put(
+                "http://httpbun.com/put",
+                put_data.dump(),
+                {{"Content-Type", "application/json"}}
+            );
+            completed.store(true);
+        }(),
+        [](std::exception_ptr e) {
+            if (e) {
+                try {
+                    std::rethrow_exception(e);
+                } catch (const std::exception& ex) {
+                    FAIL() << "Exception in coroutine: " << ex.what();
+                }
+            }
+        }
+    );
+
+    ioc.run();
+
+    EXPECT_TRUE(completed.load());
+    EXPECT_TRUE(awaitable_response.is_ok()) << "Status: " << awaitable_response.result_code;
+    EXPECT_EQ(awaitable_response.result_code, 200);
+
+    auto json = nlohmann::json::parse(awaitable_response.result_text);
+    EXPECT_TRUE(json.contains("json"));
+    EXPECT_EQ(json["json"]["updated"], true);
+}
+
+// ======================== Awaitable PATCH Tests ========================
+
+TEST_F(HttpTest, AwaitablePatch_PartialUpdate) {
+    asio::io_context ioc;
+    Http::Response awaitable_response;
+    std::atomic<bool> completed{false};
+
+    nlohmann::json patch_data = {
+        {"title", "Awaitable PATCH test"}
+    };
+
+    asio::co_spawn(
+        ioc,
+        [&]() -> asio::awaitable<void> {
+            awaitable_response = co_await Http::async_patch(
+                "https://jsonplaceholder.typicode.com/posts/1",
+                patch_data.dump(),
+                {{"Content-Type", "application/json"}}
+            );
+            completed.store(true);
+        }(),
+        [](std::exception_ptr e) {
+            if (e) {
+                try {
+                    std::rethrow_exception(e);
+                } catch (const std::exception& ex) {
+                    FAIL() << "Exception in coroutine: " << ex.what();
+                }
+            }
+        }
+    );
+
+    ioc.run();
+
+    EXPECT_TRUE(completed.load());
+    EXPECT_TRUE(awaitable_response.is_ok()) << "Status: " << awaitable_response.result_code;
+    EXPECT_EQ(awaitable_response.result_code, 200);
+
+    auto json = nlohmann::json::parse(awaitable_response.result_text);
+    EXPECT_EQ(json["title"], "Awaitable PATCH test");
+}
+
+// ======================== Awaitable DELETE Tests ========================
+
+TEST_F(HttpTest, AwaitableDelete_BasicRequest) {
+    asio::io_context ioc;
+    Http::Response awaitable_response;
+    std::atomic<bool> completed{false};
+
+    asio::co_spawn(
+        ioc,
+        [&]() -> asio::awaitable<void> {
+            awaitable_response = co_await Http::async_del("https://jsonplaceholder.typicode.com/posts/1");
+            completed.store(true);
+        }(),
+        [](std::exception_ptr e) {
+            if (e) {
+                try {
+                    std::rethrow_exception(e);
+                } catch (const std::exception& ex) {
+                    FAIL() << "Exception in coroutine: " << ex.what();
+                }
+            }
+        }
+    );
+
+    ioc.run();
+
+    EXPECT_TRUE(completed.load());
+    EXPECT_TRUE(awaitable_response.is_ok()) << "Status: " << awaitable_response.result_code;
+    EXPECT_EQ(awaitable_response.result_code, 200);
+}
+
+TEST_F(HttpTest, AwaitableDelete_WithBody) {
+    asio::io_context ioc;
+    Http::Response awaitable_response;
+    std::atomic<bool> completed{false};
+
+    nlohmann::json delete_data = {
+        {"reason", "Testing awaitable delete"}
+    };
+
+    asio::co_spawn(
+        ioc,
+        [&]() -> asio::awaitable<void> {
+            awaitable_response = co_await Http::async_del(
+                "https://httpbun.com/delete",
+                delete_data.dump(),
+                {{"Content-Type", "application/json"}}
+            );
+            completed.store(true);
+        }(),
+        [](std::exception_ptr e) {
+            if (e) {
+                try {
+                    std::rethrow_exception(e);
+                } catch (const std::exception& ex) {
+                    FAIL() << "Exception in coroutine: " << ex.what();
+                }
+            }
+        }
+    );
+
+    ioc.run();
+
+    EXPECT_TRUE(completed.load());
+    EXPECT_TRUE(awaitable_response.is_ok()) << "Status: " << awaitable_response.result_code;
+    EXPECT_EQ(awaitable_response.result_code, 200);
+}
+
+// ======================== Awaitable Sequential Tests ========================
+
+TEST_F(HttpTest, AwaitableSequential_MultipleRequests) {
+    asio::io_context ioc;
+    std::atomic<int> request_count{0};
+    std::atomic<bool> completed{false};
+
+    asio::co_spawn(
+        ioc,
+        [&]() -> asio::awaitable<void> {
+            // Sequential GET requests
+            auto resp1 = co_await Http::async_get("https://jsonplaceholder.typicode.com/posts/1");
+            EXPECT_TRUE(resp1.is_ok());
+            request_count++;
+
+            auto resp2 = co_await Http::async_get("https://jsonplaceholder.typicode.com/posts/2");
+            EXPECT_TRUE(resp2.is_ok());
+            request_count++;
+
+            auto resp3 = co_await Http::async_get("https://jsonplaceholder.typicode.com/posts/3");
+            EXPECT_TRUE(resp3.is_ok());
+            request_count++;
+
+            completed.store(true);
+        }(),
+        [](std::exception_ptr e) {
+            if (e) {
+                try {
+                    std::rethrow_exception(e);
+                } catch (const std::exception& ex) {
+                    FAIL() << "Exception in coroutine: " << ex.what();
+                }
+            }
+        }
+    );
+
+    ioc.run();
+
+    EXPECT_TRUE(completed.load());
+    EXPECT_EQ(request_count.load(), 3);
+}
+
+// ======================== Awaitable Mixed Operations Test ========================
+
+TEST_F(HttpTest, AwaitableMixed_AllHttpMethods) {
+    asio::io_context ioc;
+    std::atomic<int> operations_completed{0};
+    std::atomic<bool> completed{false};
+
+    asio::co_spawn(
+        ioc,
+        [&]() -> asio::awaitable<void> {
+            // GET
+            auto get_resp = co_await Http::async_get("https://jsonplaceholder.typicode.com/posts/1");
+            EXPECT_TRUE(get_resp.is_ok());
+            operations_completed++;
+
+            // POST
+            nlohmann::json post_data = {{"title", "test"}, {"body", "test"}, {"userId", 1}};
+            auto post_resp = co_await Http::async_post(
+                "https://jsonplaceholder.typicode.com/posts",
+                post_data.dump(),
+                {{"Content-Type", "application/json"}}
+            );
+            EXPECT_TRUE(post_resp.is_ok());
+            operations_completed++;
+
+            // PUT
+            nlohmann::json put_data = {{"id", 1}, {"title", "updated"}, {"body", "updated"}, {"userId", 1}};
+            auto put_resp = co_await Http::async_put(
+                "https://jsonplaceholder.typicode.com/posts/1",
+                put_data.dump(),
+                {{"Content-Type", "application/json"}}
+            );
+            EXPECT_TRUE(put_resp.is_ok());
+            operations_completed++;
+
+            // PATCH
+            nlohmann::json patch_data = {{"title", "patched"}};
+            auto patch_resp = co_await Http::async_patch(
+                "https://jsonplaceholder.typicode.com/posts/1",
+                patch_data.dump(),
+                {{"Content-Type", "application/json"}}
+            );
+            EXPECT_TRUE(patch_resp.is_ok());
+            operations_completed++;
+
+            // DELETE
+            auto del_resp = co_await Http::async_del("https://jsonplaceholder.typicode.com/posts/1");
+            EXPECT_TRUE(del_resp.is_ok());
+            operations_completed++;
+
+            completed.store(true);
+        }(),
+        [](std::exception_ptr e) {
+            if (e) {
+                try {
+                    std::rethrow_exception(e);
+                } catch (const std::exception& ex) {
+                    FAIL() << "Exception in coroutine: " << ex.what();
+                }
+            }
+        }
+    );
+
+    ioc.run();
+
+    EXPECT_TRUE(completed.load());
+    EXPECT_EQ(operations_completed.load(), 5);
+}
+
 } // namespace slick::net

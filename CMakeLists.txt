@@ -7,8 +7,10 @@ if (MSVC)
     endif()
 endif()
 
-set(BUILD_VERSION 1.1.2)
-project(slick_net VERSION ${BUILD_VERSION} LANGUAGES CXX)
+project(slick_net
+    VERSION 1.2.0
+    LANGUAGES CXX
+)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -139,7 +141,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
 
     if (PROJECT_IS_TOP_LEVEL)
         add_custom_target(package_slick_net ALL
-            COMMAND ${CMAKE_COMMAND} -E tar "cfv" "${CMAKE_BINARY_DIR}/dist/slick_net_${BUILD_VERSION}.zip" --format=zip "include"
+            COMMAND ${CMAKE_COMMAND} -E tar "cfv" "${CMAKE_BINARY_DIR}/dist/slick_net_${PROJECT_VERSION}.zip" --format=zip "include"
             WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/dist"
             COMMENT "Creating zip archive"
         )

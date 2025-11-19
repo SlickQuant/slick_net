@@ -13,7 +13,7 @@ A high-performance C++ HTTP/WebSocket client library built on Boost.Beast with f
 - **HTTP Streaming**: Support for Server-Sent Events (SSE) and chunked response streaming
 - **Asynchronous WebSocket Client**: Built on Boost.Asio coroutines for high-performance async operations
 - **SSL/TLS Support**: Native support for secure `https://` and `wss://` connections
-- **Synchronous & Asynchronous APIs**: Both blocking and non-blocking HTTP operations
+- **Multiple Async APIs**: Synchronous, callback-based, and C++20 coroutine awaitable interfaces
 - **Cross-Platform**: Works on Windows, Linux, and macOS
 - **Header-Only**: Easy integration with minimal dependencies
 - **Callback-Based API**: Clean event-driven interface for connection lifecycle management
@@ -156,6 +156,7 @@ Run examples:
 ./examples/websocket_client_example
 ./examples/http_client_example
 ./examples/http_stream_client_example
+./examples/http_awaitable_client_example
 ```
 
 ## API Reference
@@ -171,13 +172,22 @@ Http::Response patch(std::string_view url, std::string_view data, std::vector<st
 Http::Response del(std::string_view url, std::string_view data, std::vector<std::pair<std::string, std::string>>&& headers = {});
 ```
 
-**Asynchronous Methods:**
+**Asynchronous Callback-Based Methods:**
 ```cpp
 void async_get(std::function<void(Response&&)> on_response, std::string_view url, std::vector<std::pair<std::string, std::string>>&& headers = {});
 void async_post(std::function<void(Response&&)> on_response, std::string_view url, std::string_view data, std::vector<std::pair<std::string, std::string>>&& headers = {});
 void async_put(std::function<void(Response&&)> on_response, std::string_view url, std::string_view data, std::vector<std::pair<std::string, std::string>>&& headers = {});
 void async_patch(std::function<void(Response&&)> on_response, std::string_view url, std::string_view data, std::vector<std::pair<std::string, std::string>>&& headers = {});
 void async_del(std::function<void(Response&&)> on_response, std::string_view url, std::string_view data, std::vector<std::pair<std::string, std::string>>&& headers = {});
+```
+
+**Asynchronous Awaitable Methods (C++20 Coroutines):**
+```cpp
+asio::awaitable<Response> async_get(std::string_view url, std::vector<std::pair<std::string, std::string>>&& headers = {});
+asio::awaitable<Response> async_post(std::string_view url, std::string_view data, std::vector<std::pair<std::string, std::string>>&& headers = {});
+asio::awaitable<Response> async_put(std::string_view url, std::string_view data, std::vector<std::pair<std::string, std::string>>&& headers = {});
+asio::awaitable<Response> async_patch(std::string_view url, std::string_view data, std::vector<std::pair<std::string, std::string>>&& headers = {});
+asio::awaitable<Response> async_del(std::string_view url, std::string_view data = "", std::vector<std::pair<std::string, std::string>>&& headers = {});
 ```
 
 **Response Structure:**
@@ -189,7 +199,7 @@ struct Response {
 };
 ```
 
-**Example Usage:**
+**Example Usage - Synchronous:**
 ```cpp
 #include <slick/net/http.h>
 
@@ -198,6 +208,11 @@ auto response = Http::get("https://api.example.com/data");
 if (response.is_ok()) {
     std::cout << response.result_text << std::endl;
 }
+```
+
+**Example Usage - Asynchronous Callback-Based:**
+```cpp
+#include <slick/net/http.h>
 
 // Asynchronous POST with JSON
 nlohmann::json data = {{"key", "value"}};
@@ -206,6 +221,41 @@ Http::async_post([](Http::Response&& rsp) {
         std::cout << "Success: " << rsp.result_text << std::endl;
     }
 }, "https://api.example.com/resource", data.dump(), {{"Content-Type", "application/json"}});
+```
+
+**Example Usage - Asynchronous Awaitable (C++20 Coroutines):**
+```cpp
+#include <slick/net/http.h>
+#include <boost/asio.hpp>
+
+asio::awaitable<void> fetch_data() {
+    // Awaitable GET - clean async/await syntax
+    auto response = co_await Http::async_get("https://api.example.com/data");
+    if (response.is_ok()) {
+        std::cout << "Response: " << response.result_text << std::endl;
+    }
+
+    // Sequential requests
+    nlohmann::json post_data = {{"key", "value"}};
+    auto post_response = co_await Http::async_post(
+        "https://api.example.com/resource",
+        post_data.dump(),
+        {{"Content-Type", "application/json"}}
+    );
+
+    if (post_response.is_ok()) {
+        std::cout << "Created: " << post_response.result_text << std::endl;
+    }
+}
+
+int main() {
+    asio::io_context ioc;
+
+    asio::co_spawn(ioc, fetch_data(), asio::detached);
+
+    ioc.run();
+    return 0;
+}
 ```
 
 ### Websocket Class

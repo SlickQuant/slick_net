@@ -1,5 +1,18 @@
+# [1.2.0] - 2025-01-18
+
+## New Features
+- **C++20 Coroutine Awaitable HTTP API**: Added modern async/await interface for all HTTP methods
+  - `asio::awaitable<Response> async_get(url, headers)` - Awaitable GET request
+  - `asio::awaitable<Response> async_post(url, data, headers)` - Awaitable POST request
+  - `asio::awaitable<Response> async_put(url, data, headers)` - Awaitable PUT request
+  - `asio::awaitable<Response> async_patch(url, data, headers)` - Awaitable PATCH request
+  - `asio::awaitable<Response> async_del(url, data, headers)` - Awaitable DELETE request
+  - Clean async/await syntax using `co_await` for sequential or parallel HTTP operations
+  - Uses caller's executor context (no service thread management required)
+  - Supports both HTTP and HTTPS protocols
+
 # [1.1.2] - 2025-11-13
-- Remove unnecessary slick_logger from slick_net link dependencies 
+- Remove unnecessary slick_logger from slick_net link dependencies
 - Update CMakeLists to link slick_logger with example executables
 
 # [1.1.1] - 2025-10-22
