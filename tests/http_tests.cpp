@@ -697,6 +697,9 @@ TEST_F(HttpTest, HttpStream_StatusCheck) {
 }
 
 // ======================== Awaitable GET Tests ========================
+// Note: GCC 13 has an internal compiler error with coroutine lambdas
+// See: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=103868
+#if !defined(__GNUC__) || __GNUC__ >= 14 || defined(__clang__)
 
 TEST_F(HttpTest, AwaitableGet_BasicRequest) {
     asio::io_context ioc;
@@ -1254,5 +1257,7 @@ TEST_F(HttpTest, AwaitableMixed_AllHttpMethods) {
     EXPECT_TRUE(completed.load());
     EXPECT_EQ(operations_completed.load(), 5);
 }
+
+#endif // GCC version check for awaitable tests
 
 } // namespace slick::net

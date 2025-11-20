@@ -10,6 +10,7 @@
   - Clean async/await syntax using `co_await` for sequential or parallel HTTP operations
   - Uses caller's executor context (no service thread management required)
   - Supports both HTTP and HTTPS protocols
+  - **Note**: GCC 13 has a known compiler bug with coroutine lambdas. Awaitable tests are disabled on GCC 13. Use GCC 14+ or Clang for full awaitable support.
 
 # [1.1.2] - 2025-11-13
 - Remove unnecessary slick_logger from slick_net link dependencies

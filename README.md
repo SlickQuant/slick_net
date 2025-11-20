@@ -25,6 +25,9 @@ A high-performance C++ HTTP/WebSocket client library built on Boost.Beast with f
 - **Boost** (1.75+): beast, asio, context components
 - **OpenSSL**: For SSL/TLS support
 - **C++20 Compiler**: Required for coroutine support
+  - GCC 14+ (GCC 13 has a known bug with coroutine lambdas in test code)
+  - Clang 14+
+  - MSVC 2022+
 
 ## Installation
 
