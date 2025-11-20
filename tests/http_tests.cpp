@@ -703,12 +703,14 @@ TEST_F(HttpTest, AwaitableGet_BasicRequest) {
     Http::Response awaitable_response;
     std::atomic<bool> completed{false};
 
+    auto test_coro = [&]() -> asio::awaitable<void> {
+        awaitable_response = co_await Http::async_get("https://jsonplaceholder.typicode.com/posts/1");
+        completed.store(true);
+    };
+
     asio::co_spawn(
         ioc,
-        [&]() -> asio::awaitable<void> {
-            awaitable_response = co_await Http::async_get("https://jsonplaceholder.typicode.com/posts/1");
-            completed.store(true);
-        }(),
+        test_coro(),
         [](std::exception_ptr e) {
             if (e) {
                 try {
@@ -742,12 +744,14 @@ TEST_F(HttpTest, AwaitableGet_PlainHttp) {
     Http::Response awaitable_response;
     std::atomic<bool> completed{false};
 
+    auto test_coro = [&]() -> asio::awaitable<void> {
+        awaitable_response = co_await Http::async_get("http://httpbun.com/get");
+        completed.store(true);
+    };
+
     asio::co_spawn(
         ioc,
-        [&]() -> asio::awaitable<void> {
-            awaitable_response = co_await Http::async_get("http://httpbun.com/get");
-            completed.store(true);
-        }(),
+        test_coro(),
         [](std::exception_ptr e) {
             if (e) {
                 try {
@@ -774,15 +778,17 @@ TEST_F(HttpTest, AwaitableGet_WithCustomHeaders) {
     Http::Response awaitable_response;
     std::atomic<bool> completed{false};
 
+    auto test_coro = [&]() -> asio::awaitable<void> {
+        awaitable_response = co_await Http::async_get(
+            "https://jsonplaceholder.typicode.com/posts/1",
+            {{"X-Custom-Header", "test-value"}, {"Accept", "application/json"}}
+        );
+        completed.store(true);
+    };
+
     asio::co_spawn(
         ioc,
-        [&]() -> asio::awaitable<void> {
-            awaitable_response = co_await Http::async_get(
-                "https://jsonplaceholder.typicode.com/posts/1",
-                {{"X-Custom-Header", "test-value"}, {"Accept", "application/json"}}
-            );
-            completed.store(true);
-        }(),
+        test_coro(),
         [](std::exception_ptr e) {
             if (e) {
                 try {
@@ -809,12 +815,14 @@ TEST_F(HttpTest, AwaitableGet_404NotFound) {
     Http::Response awaitable_response;
     std::atomic<bool> completed{false};
 
+    auto test_coro = [&]() -> asio::awaitable<void> {
+        awaitable_response = co_await Http::async_get("https://jsonplaceholder.typicode.com/posts/999999");
+        completed.store(true);
+    };
+
     asio::co_spawn(
         ioc,
-        [&]() -> asio::awaitable<void> {
-            awaitable_response = co_await Http::async_get("https://jsonplaceholder.typicode.com/posts/999999");
-            completed.store(true);
-        }(),
+        test_coro(),
         [](std::exception_ptr e) {
             if (e) {
                 try {
@@ -846,16 +854,18 @@ TEST_F(HttpTest, AwaitablePost_JsonData) {
         {"userId", 1}
     };
 
+    auto test_coro = [&]() -> asio::awaitable<void> {
+        awaitable_response = co_await Http::async_post(
+            "https://jsonplaceholder.typicode.com/posts",
+            post_data.dump(),
+            {{"Content-Type", "application/json"}}
+        );
+        completed.store(true);
+    };
+
     asio::co_spawn(
         ioc,
-        [&]() -> asio::awaitable<void> {
-            awaitable_response = co_await Http::async_post(
-                "https://jsonplaceholder.typicode.com/posts",
-                post_data.dump(),
-                {{"Content-Type", "application/json"}}
-            );
-            completed.store(true);
-        }(),
+        test_coro(),
         [](std::exception_ptr e) {
             if (e) {
                 try {
@@ -889,16 +899,18 @@ TEST_F(HttpTest, AwaitablePost_PlainHttp) {
         {"value", 42}
     };
 
+    auto test_coro = [&]() -> asio::awaitable<void> {
+        awaitable_response = co_await Http::async_post(
+            "http://httpbun.com/post",
+            post_data.dump(),
+            {{"Content-Type", "application/json"}}
+        );
+        completed.store(true);
+    };
+
     asio::co_spawn(
         ioc,
-        [&]() -> asio::awaitable<void> {
-            awaitable_response = co_await Http::async_post(
-                "http://httpbun.com/post",
-                post_data.dump(),
-                {{"Content-Type", "application/json"}}
-            );
-            completed.store(true);
-        }(),
+        test_coro(),
         [](std::exception_ptr e) {
             if (e) {
                 try {
@@ -935,16 +947,18 @@ TEST_F(HttpTest, AwaitablePut_UpdateResource) {
         {"userId", 1}
     };
 
+    auto test_coro = [&]() -> asio::awaitable<void> {
+        awaitable_response = co_await Http::async_put(
+            "https://jsonplaceholder.typicode.com/posts/1",
+            put_data.dump(),
+            {{"Content-Type", "application/json"}}
+        );
+        completed.store(true);
+    };
+
     asio::co_spawn(
         ioc,
-        [&]() -> asio::awaitable<void> {
-            awaitable_response = co_await Http::async_put(
-                "https://jsonplaceholder.typicode.com/posts/1",
-                put_data.dump(),
-                {{"Content-Type", "application/json"}}
-            );
-            completed.store(true);
-        }(),
+        test_coro(),
         [](std::exception_ptr e) {
             if (e) {
                 try {
@@ -976,16 +990,18 @@ TEST_F(HttpTest, AwaitablePut_PlainHttp) {
         {"timestamp", 1234567890}
     };
 
+    auto test_coro = [&]() -> asio::awaitable<void> {
+        awaitable_response = co_await Http::async_put(
+            "http://httpbun.com/put",
+            put_data.dump(),
+            {{"Content-Type", "application/json"}}
+        );
+        completed.store(true);
+    };
+
     asio::co_spawn(
         ioc,
-        [&]() -> asio::awaitable<void> {
-            awaitable_response = co_await Http::async_put(
-                "http://httpbun.com/put",
-                put_data.dump(),
-                {{"Content-Type", "application/json"}}
-            );
-            completed.store(true);
-        }(),
+        test_coro(),
         [](std::exception_ptr e) {
             if (e) {
                 try {
@@ -1019,16 +1035,18 @@ TEST_F(HttpTest, AwaitablePatch_PartialUpdate) {
         {"title", "Awaitable PATCH test"}
     };
 
+    auto test_coro = [&]() -> asio::awaitable<void> {
+        awaitable_response = co_await Http::async_patch(
+            "https://jsonplaceholder.typicode.com/posts/1",
+            patch_data.dump(),
+            {{"Content-Type", "application/json"}}
+        );
+        completed.store(true);
+    };
+
     asio::co_spawn(
         ioc,
-        [&]() -> asio::awaitable<void> {
-            awaitable_response = co_await Http::async_patch(
-                "https://jsonplaceholder.typicode.com/posts/1",
-                patch_data.dump(),
-                {{"Content-Type", "application/json"}}
-            );
-            completed.store(true);
-        }(),
+        test_coro(),
         [](std::exception_ptr e) {
             if (e) {
                 try {
@@ -1057,12 +1075,14 @@ TEST_F(HttpTest, AwaitableDelete_BasicRequest) {
     Http::Response awaitable_response;
     std::atomic<bool> completed{false};
 
+    auto test_coro = [&]() -> asio::awaitable<void> {
+        awaitable_response = co_await Http::async_del("https://jsonplaceholder.typicode.com/posts/1");
+        completed.store(true);
+    };
+
     asio::co_spawn(
         ioc,
-        [&]() -> asio::awaitable<void> {
-            awaitable_response = co_await Http::async_del("https://jsonplaceholder.typicode.com/posts/1");
-            completed.store(true);
-        }(),
+        test_coro(),
         [](std::exception_ptr e) {
             if (e) {
                 try {
@@ -1090,16 +1110,18 @@ TEST_F(HttpTest, AwaitableDelete_WithBody) {
         {"reason", "Testing awaitable delete"}
     };
 
+    auto test_coro = [&]() -> asio::awaitable<void> {
+        awaitable_response = co_await Http::async_del(
+            "https://httpbun.com/delete",
+            delete_data.dump(),
+            {{"Content-Type", "application/json"}}
+        );
+        completed.store(true);
+    };
+
     asio::co_spawn(
         ioc,
-        [&]() -> asio::awaitable<void> {
-            awaitable_response = co_await Http::async_del(
-                "https://httpbun.com/delete",
-                delete_data.dump(),
-                {{"Content-Type", "application/json"}}
-            );
-            completed.store(true);
-        }(),
+        test_coro(),
         [](std::exception_ptr e) {
             if (e) {
                 try {
@@ -1125,24 +1147,26 @@ TEST_F(HttpTest, AwaitableSequential_MultipleRequests) {
     std::atomic<int> request_count{0};
     std::atomic<bool> completed{false};
 
+    auto test_coro = [&]() -> asio::awaitable<void> {
+        // Sequential GET requests
+        auto resp1 = co_await Http::async_get("https://jsonplaceholder.typicode.com/posts/1");
+        EXPECT_TRUE(resp1.is_ok());
+        request_count++;
+
+        auto resp2 = co_await Http::async_get("https://jsonplaceholder.typicode.com/posts/2");
+        EXPECT_TRUE(resp2.is_ok());
+        request_count++;
+
+        auto resp3 = co_await Http::async_get("https://jsonplaceholder.typicode.com/posts/3");
+        EXPECT_TRUE(resp3.is_ok());
+        request_count++;
+
+        completed.store(true);
+    };
+
     asio::co_spawn(
         ioc,
-        [&]() -> asio::awaitable<void> {
-            // Sequential GET requests
-            auto resp1 = co_await Http::async_get("https://jsonplaceholder.typicode.com/posts/1");
-            EXPECT_TRUE(resp1.is_ok());
-            request_count++;
-
-            auto resp2 = co_await Http::async_get("https://jsonplaceholder.typicode.com/posts/2");
-            EXPECT_TRUE(resp2.is_ok());
-            request_count++;
-
-            auto resp3 = co_await Http::async_get("https://jsonplaceholder.typicode.com/posts/3");
-            EXPECT_TRUE(resp3.is_ok());
-            request_count++;
-
-            completed.store(true);
-        }(),
+        test_coro(),
         [](std::exception_ptr e) {
             if (e) {
                 try {
@@ -1167,51 +1191,53 @@ TEST_F(HttpTest, AwaitableMixed_AllHttpMethods) {
     std::atomic<int> operations_completed{0};
     std::atomic<bool> completed{false};
 
+    auto test_coro = [&]() -> asio::awaitable<void> {
+        // GET
+        auto get_resp = co_await Http::async_get("https://jsonplaceholder.typicode.com/posts/1");
+        EXPECT_TRUE(get_resp.is_ok());
+        operations_completed++;
+
+        // POST
+        nlohmann::json post_data = {{"title", "test"}, {"body", "test"}, {"userId", 1}};
+        auto post_resp = co_await Http::async_post(
+            "https://jsonplaceholder.typicode.com/posts",
+            post_data.dump(),
+            {{"Content-Type", "application/json"}}
+        );
+        EXPECT_TRUE(post_resp.is_ok());
+        operations_completed++;
+
+        // PUT
+        nlohmann::json put_data = {{"id", 1}, {"title", "updated"}, {"body", "updated"}, {"userId", 1}};
+        auto put_resp = co_await Http::async_put(
+            "https://jsonplaceholder.typicode.com/posts/1",
+            put_data.dump(),
+            {{"Content-Type", "application/json"}}
+        );
+        EXPECT_TRUE(put_resp.is_ok());
+        operations_completed++;
+
+        // PATCH
+        nlohmann::json patch_data = {{"title", "patched"}};
+        auto patch_resp = co_await Http::async_patch(
+            "https://jsonplaceholder.typicode.com/posts/1",
+            patch_data.dump(),
+            {{"Content-Type", "application/json"}}
+        );
+        EXPECT_TRUE(patch_resp.is_ok());
+        operations_completed++;
+
+        // DELETE
+        auto del_resp = co_await Http::async_del("https://jsonplaceholder.typicode.com/posts/1");
+        EXPECT_TRUE(del_resp.is_ok());
+        operations_completed++;
+
+        completed.store(true);
+    };
+
     asio::co_spawn(
         ioc,
-        [&]() -> asio::awaitable<void> {
-            // GET
-            auto get_resp = co_await Http::async_get("https://jsonplaceholder.typicode.com/posts/1");
-            EXPECT_TRUE(get_resp.is_ok());
-            operations_completed++;
-
-            // POST
-            nlohmann::json post_data = {{"title", "test"}, {"body", "test"}, {"userId", 1}};
-            auto post_resp = co_await Http::async_post(
-                "https://jsonplaceholder.typicode.com/posts",
-                post_data.dump(),
-                {{"Content-Type", "application/json"}}
-            );
-            EXPECT_TRUE(post_resp.is_ok());
-            operations_completed++;
-
-            // PUT
-            nlohmann::json put_data = {{"id", 1}, {"title", "updated"}, {"body", "updated"}, {"userId", 1}};
-            auto put_resp = co_await Http::async_put(
-                "https://jsonplaceholder.typicode.com/posts/1",
-                put_data.dump(),
-                {{"Content-Type", "application/json"}}
-            );
-            EXPECT_TRUE(put_resp.is_ok());
-            operations_completed++;
-
-            // PATCH
-            nlohmann::json patch_data = {{"title", "patched"}};
-            auto patch_resp = co_await Http::async_patch(
-                "https://jsonplaceholder.typicode.com/posts/1",
-                patch_data.dump(),
-                {{"Content-Type", "application/json"}}
-            );
-            EXPECT_TRUE(patch_resp.is_ok());
-            operations_completed++;
-
-            // DELETE
-            auto del_resp = co_await Http::async_del("https://jsonplaceholder.typicode.com/posts/1");
-            EXPECT_TRUE(del_resp.is_ok());
-            operations_completed++;
-
-            completed.store(true);
-        }(),
+        test_coro(),
         [](std::exception_ptr e) {
             if (e) {
                 try {
