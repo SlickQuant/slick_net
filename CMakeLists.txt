@@ -42,7 +42,7 @@ message(STATUS "Beast: ${boost_beast_CONFIG}")
 
 # Add header-only library
 add_library(slick_net INTERFACE)
-add_library(slic::slick_net ALIAS slick_net)
+add_library(slick::slick_net ALIAS slick_net)
 target_include_directories(slick_net INTERFACE 
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
