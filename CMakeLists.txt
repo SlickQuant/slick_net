@@ -8,7 +8,7 @@ if (MSVC)
 endif()
 
 project(slick_net
-    VERSION 1.2.0
+    VERSION 1.2.1
     LANGUAGES CXX
 )
 
@@ -131,6 +131,38 @@ endif()
 
 # Installation rules
 install(DIRECTORY include/ DESTINATION include)
+
+# Install targets and create CMake config files
+install(TARGETS slick_net
+    EXPORT slick_net-targets
+    INCLUDES DESTINATION include
+)
+
+install(EXPORT slick_net-targets
+    FILE slick_net-targets.cmake
+    NAMESPACE slick::
+    DESTINATION share/slick_net
+)
+
+# Create config file
+include(CMakePackageConfigHelpers)
+configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/slick_net-config.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/slick_net-config.cmake"
+    INSTALL_DESTINATION share/slick_net
+)
+
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/slick_net-config-version.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/slick_net-config.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/slick_net-config-version.cmake"
+    DESTINATION share/slick_net
+)
 
 # Automatically run install after build in Release mode
 if(CMAKE_BUILD_TYPE STREQUAL "Release")

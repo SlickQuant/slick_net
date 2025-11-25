@@ -881,6 +881,210 @@ TEST_F(WebsocketTest, PlainWebsocket_UrlParsing) {
     SUCCEED();
 }
 
+// ======================== Send Immediately After Open Tests ========================
+
+TEST_F(WebsocketTest, SendImmediatelyAfterOpen_MessageQueuedAndSentAfterConnect) {
+    EventSynchronizer connected_sync;
+    EventSynchronizer data_sync;
+    std::string received_data;
+    std::atomic<bool> message_sent{false};
+
+    auto ws = std::make_shared<Websocket>(
+        "wss://ws.postman-echo.com/raw",
+        [&]() {
+            connected_sync.notify();
+        },
+        [&]() {},
+        [&](const char* data, std::size_t len) {
+            received_data.assign(data, len);
+            data_sync.notify();
+        },
+        [&](std::string) {}
+    );
+
+    // Initial state should be DISCONNECTED
+    EXPECT_EQ(ws->status(), Websocket::Status::DISCONNECTED);
+
+    // Open the WebSocket connection
+    ws->open();
+
+    // Immediately send data right after calling open (before connection is established)
+    const char* test_message = "Immediate message after open";
+    ws->send(test_message, strlen(test_message));
+    message_sent.store(true);
+
+    // At this point, the connection should be CONNECTING or CONNECTED
+    auto status_after_send = ws->status();
+    EXPECT_TRUE(status_after_send == Websocket::Status::CONNECTING ||
+                status_after_send == Websocket::Status::CONNECTED);
+
+    // Wait for connection to be established
+    connected_sync.wait_for(std::chrono::milliseconds(10000));
+
+    EXPECT_TRUE(connected_sync.is_triggered());
+    if (connected_sync.is_triggered()) {
+        EXPECT_EQ(ws->status(), Websocket::Status::CONNECTED);
+        EXPECT_TRUE(message_sent.load());
+
+        // Wait for the echo response
+        data_sync.wait_for(std::chrono::milliseconds(5000));
+
+        if (data_sync.is_triggered()) {
+            // Verify the message was sent and echoed back after connection was established
+            EXPECT_EQ(received_data, "Immediate message after open");
+        }
+    }
+
+    // Always close the websocket
+    ws->close();
+}
+
+TEST_F(WebsocketTest, SendImmediatelyAfterOpen_MultipleMessages) {
+    EventSynchronizer connected_sync;
+    std::atomic<int> messages_received{0};
+    std::vector<std::string> received_messages;
+    std::mutex messages_mutex;
+
+    auto ws = std::make_shared<Websocket>(
+        "wss://ws.postman-echo.com/raw",
+        [&]() {
+            connected_sync.notify();
+        },
+        [&]() {},
+        [&](const char* data, std::size_t len) {
+            std::lock_guard<std::mutex> lock(messages_mutex);
+            received_messages.emplace_back(data, len);
+            messages_received++;
+        },
+        [&](std::string) {}
+    );
+
+    EXPECT_EQ(ws->status(), Websocket::Status::DISCONNECTED);
+
+    // Open connection
+    ws->open();
+
+    // Immediately send multiple messages right after open
+    const int num_messages = 3;
+    for (int i = 0; i < num_messages; ++i) {
+        std::string msg = "Quick message " + std::to_string(i);
+        ws->send(msg.c_str(), msg.size());
+    }
+
+    // Wait for connection to establish
+    connected_sync.wait_for(std::chrono::milliseconds(10000));
+
+    EXPECT_TRUE(connected_sync.is_triggered());
+    if (connected_sync.is_triggered()) {
+        EXPECT_EQ(ws->status(), Websocket::Status::CONNECTED);
+
+        // Wait for all messages to be received
+        wait_for_condition([&]() { return messages_received >= num_messages; },
+                          std::chrono::milliseconds(10000));
+
+        // All messages should have been queued and sent after connection established
+        EXPECT_GE(messages_received.load(), num_messages);
+
+        std::lock_guard<std::mutex> lock(messages_mutex);
+        EXPECT_GE(received_messages.size(), static_cast<size_t>(num_messages));
+    }
+
+    ws->close();
+}
+
+TEST_F(WebsocketTest, SendImmediatelyAfterOpen_VerifyOrderPreserved) {
+    EventSynchronizer connected_sync;
+    std::atomic<int> messages_received{0};
+    std::vector<std::string> received_messages;
+    std::mutex messages_mutex;
+
+    auto ws = std::make_shared<Websocket>(
+        "wss://ws.postman-echo.com/raw",
+        [&]() {
+            connected_sync.notify();
+        },
+        [&]() {},
+        [&](const char* data, std::size_t len) {
+            std::lock_guard<std::mutex> lock(messages_mutex);
+            received_messages.emplace_back(data, len);
+            messages_received++;
+        },
+        [&](std::string) {}
+    );
+
+    ws->open();
+
+    // Send messages immediately after open - they should be queued
+    ws->send("First", 5);
+    ws->send("Second", 6);
+    ws->send("Third", 5);
+
+    // Wait for connection
+    connected_sync.wait_for(std::chrono::milliseconds(10000));
+
+    EXPECT_TRUE(connected_sync.is_triggered());
+    if (connected_sync.is_triggered()) {
+        // Wait for all messages to arrive
+        wait_for_condition([&]() { return messages_received >= 3; },
+                          std::chrono::milliseconds(10000));
+
+        std::lock_guard<std::mutex> lock(messages_mutex);
+        EXPECT_GE(received_messages.size(), 3u);
+
+        // Verify order is preserved (messages queued before connection should arrive in order)
+        if (received_messages.size() >= 3) {
+            EXPECT_EQ(received_messages[0], "First");
+            EXPECT_EQ(received_messages[1], "Second");
+            EXPECT_EQ(received_messages[2], "Third");
+        }
+    }
+
+    ws->close();
+}
+
+TEST_F(WebsocketTest, SendImmediatelyAfterOpen_LargeMessage) {
+    EventSynchronizer connected_sync;
+    EventSynchronizer data_sync;
+    std::string received_data;
+
+    auto ws = std::make_shared<Websocket>(
+        "wss://ws.postman-echo.com/raw",
+        [&]() {
+            connected_sync.notify();
+        },
+        [&]() {},
+        [&](const char* data, std::size_t len) {
+            received_data.assign(data, len);
+            data_sync.notify();
+        },
+        [&](std::string) {}
+    );
+
+    ws->open();
+
+    // Send a large message immediately after open
+    std::string large_message(5120, 'X');  // 5KB message
+    ws->send(large_message.c_str(), large_message.size());
+
+    // Wait for connection
+    connected_sync.wait_for(std::chrono::milliseconds(10000));
+
+    EXPECT_TRUE(connected_sync.is_triggered());
+    if (connected_sync.is_triggered()) {
+        EXPECT_EQ(ws->status(), Websocket::Status::CONNECTED);
+
+        // Wait for the large message echo
+        data_sync.wait_for(std::chrono::milliseconds(10000));
+
+        if (data_sync.is_triggered()) {
+            EXPECT_EQ(received_data.size(), large_message.size());
+            EXPECT_EQ(received_data, large_message);
+        }
+    }
+
+    ws->close();
+}
+
 // Note: Main tests use wss://ws.postman-echo.com which is a public test server.
 // Tests may fail if the server is down or network is unavailable.
 //

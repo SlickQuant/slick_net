@@ -1,3 +1,38 @@
+# [1.2.1] - 2025-01-25
+
+## New Features
+- **vcpkg Package Manager Support**: Full integration with vcpkg for easy installation and dependency management
+  - Created CMake config files for proper package discovery
+  - Ready for submission to official vcpkg registry
+
+## Improvements
+- **WebSocket Message Queueing**: Enhanced `send()` method to properly queue messages sent immediately after `open()`
+  - Messages are now queued during `CONNECTING` state and sent after connection is established
+  - Ensures messages sent right after `open()` are not lost and are delivered in order
+  - Updated status check to allow queueing during both `DISCONNECTED` and `CONNECTING` states
+
+## Testing
+- Added comprehensive WebSocket unit tests for send-after-open scenarios:
+  - `SendImmediatelyAfterOpen_MessageQueuedAndSentAfterConnect` - Single message test
+  - `SendImmediatelyAfterOpen_MultipleMessages` - Multiple messages queuing test
+  - `SendImmediatelyAfterOpen_VerifyOrderPreserved` - Message ordering verification
+  - `SendImmediatelyAfterOpen_LargeMessage` - Large message (5KB) queueing test
+
+## Build System
+- Added CMake installation rules for proper package export
+- Created `slick_net-config.cmake.in` template for downstream projects
+- Added version compatibility checking (SameMajorVersion policy)
+- Improved CMake target exports with proper namespace (`slick::slick_net`)
+
+## CI/CD
+- Updated GitHub Actions CI to use GCC 14 on Linux for full C++20 coroutine support
+- Removed GCC 13 compatibility workarounds for awaitable HTTP tests
+
+## Documentation
+- Added `VCPKG.md` with complete vcpkg integration guide
+- Created `ports/slick-net/README.md` for port maintainers
+- Added usage instructions in `ports/slick-net/usage`
+
 # [1.2.0] - 2025-01-18
 
 ## New Features

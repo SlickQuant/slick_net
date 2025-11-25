@@ -312,7 +312,11 @@ inline void Websocket::close()
 
 inline void Websocket::send(const char* buffer, size_t len, bool is_binary)
 {
-    auto l = len + 1;   // +1 for is_bool flag
+    if (status_.load(std::memory_order_relaxed) > Status::CONNECTED) {
+        LOG_WARN("WebSocket not connected, cannot send data.");
+        return;
+    }
+    auto l = static_cast<uint32_t>(len) + 1;   // +1 for is_bool flag
     auto index = w_buffer_.reserve(l);
     *w_buffer_[index] = static_cast<char>(is_binary);
     memcpy(w_buffer_[index + 1], buffer, len);
@@ -500,14 +504,20 @@ inline asio::awaitable<void> Websocket::do_ws_session_plain() {
 }
 
 inline void Websocket::do_write() {
+    if (status_.load(std::memory_order_relaxed) != Status::CONNECTED) [[unlikely]] {
+        if (status_.load(std::memory_order_relaxed) == Status::CONNECTING) {
+            // Still connecting, repost do_write to try later
+            auto executor = use_ssl_ ? wss_->get_executor() : ws_->get_executor();
+            asio::post(executor, [self = shared_from_this()]() {
+                self->do_write();
+            });
+        }
+        // else: socket close is called
+        return;
+    }
     // Read is already within the executor strand, safe to access w_cursor_
     auto [msg, len] = w_buffer_.read(w_cursor_);
     if (msg && len) {
-        if (status_.load(std::memory_order_relaxed) != Status::CONNECTED) [[unlikely]] {
-            // socket close is called
-            return;
-        }
-
         bool is_binary = msg[0];
         ++msg;
         --len;
