@@ -28,11 +28,6 @@
 - Updated GitHub Actions CI to use GCC 14 on Linux for full C++20 coroutine support
 - Removed GCC 13 compatibility workarounds for awaitable HTTP tests
 
-## Documentation
-- Added `VCPKG.md` with complete vcpkg integration guide
-- Created `ports/slick-net/README.md` for port maintainers
-- Added usage instructions in `ports/slick-net/usage`
-
 # [1.2.0] - 2025-01-18
 
 ## New Features
